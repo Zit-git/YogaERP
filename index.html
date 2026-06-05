@@ -1,0 +1,524 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Aliyar Course & Batch Management</title>
+    <link rel="stylesheet" href="styles.css?v=34">
+  </head>
+  <body>
+    <aside class="sidebar" aria-label="Primary navigation">
+      <div class="brand">
+        <div class="brand-mark">AY</div>
+        <div>
+          <strong>Aliyar Programs</strong>
+          <span>Residential Program Operations</span>
+        </div>
+      </div>
+      <div class="operator-card auth-card" id="authCard"></div>
+      <nav id="nav"></nav>
+      <button class="ghost-button full" id="resetData" type="button">Reset seed records</button>
+    </aside>
+
+    <main class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Management System</p>
+          <h1 id="pageTitle">Operations Dashboard</h1>
+        </div>
+        <div class="top-actions">
+          <label class="search-box">
+            <span>Search</span>
+            <input id="globalSearch" type="search" placeholder="Participant, batch, room">
+          </label>
+          <button class="primary-button" id="openRegistration" type="button">New Registration</button>
+        </div>
+      </header>
+      <section id="portal" class="view is-active" data-title="Batch Portal">
+        <div class="portal-layout">
+          <section class="panel">
+            <div class="panel-header">
+              <div>
+                <h2>Available Batches</h2>
+                <span class="muted">Public batch listing and registration entry</span>
+              </div>
+              <button class="primary-button" id="portalRegistration" type="button">Register Without Login</button>
+            </div>
+            <div class="table-wrap flat-table">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Batch</th>
+                    <th>Dates</th>
+                    <th>Teacher</th>
+                    <th>Seats</th>
+                    <th>Hall</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="portalBatchRows"></tbody>
+              </table>
+            </div>
+          </section>
+          <section class="panel login-panel">
+            <div class="panel-header">
+              <div>
+                <h2>Login</h2>
+                <span class="muted">Role-based access for participants, teachers, and admins</span>
+              </div>
+            </div>
+            <form id="loginForm" class="login-form">
+              <label>Login As
+                <select name="role" id="loginRole">
+                  <option value="participant">Participant</option>
+                  <option value="teacher">Teacher</option>
+                  <option value="admin">Admin</option>
+                </select>
+              </label>
+              <label>Login ID<input name="identifier" placeholder="Participant ID, phone, teacher email, or admin" required></label>
+              <label>Password<input name="password" type="password" placeholder="Demo login accepts any password"></label>
+              <button class="primary-button" type="submit">Login</button>
+            </form>
+            <div class="login-help">
+              <span>Participant: p1 or 9876500011</span>
+              <span>Teacher: t1 or meenakshi@example.com</span>
+              <span>Admin: admin</span>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section id="dashboard" class="view" data-title="Operations Dashboard">
+        <section class="panel section-panel calendar-panel">
+          <div class="panel-header">
+            <div>
+              <h2>Batch Calendar</h2>
+              <span class="muted">Scheduled residential batches by month</span>
+            </div>
+            <div class="calendar-controls">
+              <button class="secondary-button" id="previousMonth" type="button">Previous</button>
+              <strong id="calendarTitle"></strong>
+              <button class="secondary-button" id="nextMonth" type="button">Next</button>
+            </div>
+          </div>
+          <div class="calendar-grid" id="programCalendar" aria-label="Program schedule calendar"></div>
+        </section>
+      </section>
+
+      <section id="programs" class="view" data-title="Course Master">
+        <div class="section-toolbar">
+          <div>
+            <h2>Course Master</h2>
+            <p>Maintain the hierarchy of course families, levels, duration, and eligibility.</p>
+          </div>
+          <button class="primary-button" id="addProgram" type="button">Add Course</button>
+        </div>
+        <div class="program-master-layout">
+          <section class="panel">
+            <div class="panel-header">
+              <h2>Course Hierarchy</h2>
+              <span class="muted">Master structure</span>
+            </div>
+            <div id="programHierarchy" class="program-tree"></div>
+          </section>
+          <section class="panel">
+            <div class="panel-header">
+              <h2>Course Details</h2>
+              <span class="muted">Codes, level, duration, and eligibility</span>
+            </div>
+            <div class="table-wrap flat-table">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Course</th>
+                    <th>Code</th>
+                    <th>Level</th>
+                    <th>Duration</th>
+                    <th>Eligibility</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="programRows"></tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section id="courses" class="view" data-title="Batch Management">
+        <div class="section-toolbar">
+          <div>
+            <h2>Batches & Schedules</h2>
+            <p>Create scheduled course batches, intake limits, teachers, halls, and dates.</p>
+          </div>
+          <button class="primary-button" id="addCourse" type="button">Add Batch</button>
+        </div>
+        <div class="batches-master-layout">
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Batch</th>
+                  <th>Schedule</th>
+                  <th>Teacher</th>
+                  <th>Seats</th>
+                  <th>Hall</th>
+                </tr>
+              </thead>
+              <tbody id="batchRows"></tbody>
+            </table>
+          </div>
+          <section class="panel batch-detail-panel">
+            <div class="panel-header">
+              <div>
+                <h2>Batch Detail</h2>
+                <span class="muted">Schedule, teacher, participants, and daily attendance</span>
+              </div>
+            </div>
+            <div id="batchDetail"></div>
+          </section>
+        </div>
+      </section>
+
+      <section id="teachers" class="view" data-title="Teacher Master">
+        <div class="section-toolbar">
+          <div>
+            <h2>Teacher Master</h2>
+            <p>Maintain faculty records, contact details, specialities, and batch assignments.</p>
+          </div>
+          <button class="primary-button" id="addTeacherFromView" type="button">Add Teacher</button>
+        </div>
+        <div class="teachers-master-layout">
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Teacher</th>
+                  <th>Speciality</th>
+                  <th>Contact</th>
+                  <th>Batches</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="teacherRows"></tbody>
+            </table>
+          </div>
+          <section class="panel teacher-detail-panel">
+            <div class="panel-header">
+              <div>
+                <h2>Teacher Profile</h2>
+                <span class="muted">Photo, contact details, and programs conducted</span>
+              </div>
+            </div>
+            <div id="teacherDetail"></div>
+          </section>
+        </div>
+      </section>
+
+      <section id="participants" class="view" data-title="Participants Master">
+        <div class="section-toolbar">
+          <div>
+            <h2>Participants Master</h2>
+            <p>Participant profiling with photo, personal details, programs attended, completion, and accommodation records.</p>
+          </div>
+          <button class="primary-button" id="addParticipantFromMaster" type="button">Add Participant</button>
+        </div>
+        <div class="participants-master-layout">
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Participant</th>
+                  <th>Batch</th>
+                  <th>Completion</th>
+                  <th>Accommodation</th>
+                </tr>
+              </thead>
+              <tbody id="participantMasterRows"></tbody>
+            </table>
+          </div>
+          <section class="panel participant-detail-panel">
+            <div class="panel-header">
+              <div>
+                <h2>Participant Profile</h2>
+                <span class="muted">Photo, personal details, programs, and stay record</span>
+              </div>
+            </div>
+            <div id="participantDetail"></div>
+          </section>
+        </div>
+      </section>
+
+      <section id="registrations" class="view" data-title="Registration & Eligibility">
+        <div class="section-toolbar">
+          <div>
+            <h2>Registrations</h2>
+            <p>Review applications, eligibility, confirmation, and waitlist movement.</p>
+          </div>
+          <div class="segmented" id="registrationFilter">
+            <button class="is-selected" data-filter="all" type="button">All</button>
+            <button data-filter="Pending" type="button">Pending</button>
+            <button data-filter="Confirmed" type="button">Confirmed</button>
+            <button data-filter="Waitlist" type="button">Waitlist</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Batch</th>
+                <th>Status</th>
+                <th>Eligibility</th>
+                <th>Room</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="participantRows"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="accommodation" class="view" data-title="Accommodation Management">
+        <div class="section-toolbar">
+          <div>
+            <h2>Rooms & Occupancy</h2>
+            <p>Manage blocks, floors, rooms, bed capacity, and arrival readiness.</p>
+          </div>
+          <div class="row-actions">
+            <button class="primary-button" id="addAccommodationRecord" type="button">Add Record</button>
+            <button class="secondary-button" id="autoAssign" type="button">Auto Assign Rooms</button>
+          </div>
+        </div>
+        <div class="segmented subnav" id="accommodationTabs">
+          <button class="is-selected" data-accommodation-tab="blocks" type="button">Blocks</button>
+          <button data-accommodation-tab="rooms" type="button">Floors & Rooms</button>
+        </div>
+        <div id="accommodationContent"></div>
+      </section>
+
+      <section id="halls" class="view" data-title="Program Hall Master">
+        <div class="section-toolbar">
+          <div>
+            <h2>Program Hall Master</h2>
+            <p>Maintain program halls, capacity, location, and remarks.</p>
+          </div>
+          <button class="primary-button" id="addHall" type="button">Add Hall</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Hall</th>
+                <th>Capacity</th>
+                <th>Location</th>
+                <th>Notes</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="hallRows"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="hallBookings" class="view" data-title="Program Hall Bookings">
+        <div class="section-toolbar">
+          <div>
+            <h2>Program Hall Bookings</h2>
+            <p>Allot batches to halls and track booking dates.</p>
+          </div>
+          <button class="primary-button" id="addHallBooking" type="button">Add Booking</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Batch</th>
+                <th>Hall</th>
+                <th>Dates</th>
+                <th>Notes</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="hallBookingRows"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="certificates" class="view" data-title="Completion & Certificates">
+        <div class="section-toolbar">
+          <div>
+            <h2>Completion & Certificates</h2>
+            <p>Approve completion and generate certificate records for eligible participants.</p>
+          </div>
+          <button class="primary-button" id="generateCertificates" type="button">Generate Certificates</button>
+        </div>
+        <div id="certificateList" class="stack"></div>
+      </section>
+
+      <section id="history" class="view" data-title="Participant History">
+        <div class="section-toolbar">
+          <div>
+            <h2>Participant History</h2>
+            <p>Search past batches, attendance, dropouts, certificates, and room stays.</p>
+          </div>
+        </div>
+        <div id="historyList" class="stack"></div>
+      </section>
+    </main>
+
+    <dialog id="registrationDialog">
+      <form method="dialog" id="registrationForm">
+        <div class="modal-header">
+          <div>
+            <p class="eyebrow">Public Registration Portal</p>
+            <h2>New Registration</h2>
+          </div>
+          <button class="icon-button" id="closeRegistration" value="cancel" aria-label="Close" type="button">x</button>
+        </div>
+        <div class="form-grid">
+          <label>Name<input name="name" required></label>
+          <label>Age<input name="age" type="number" min="12" max="100" required></label>
+          <label>Gender
+            <select name="gender" required>
+              <option>Female</option>
+              <option>Male</option>
+              <option>Other</option>
+            </select>
+          </label>
+          <label>Batch<select name="course" id="courseSelect"></select></label>
+          <label>Phone<input name="phone" required></label>
+          <label>Email<input name="email" type="email" required></label>
+          <label>Photo URL<input name="photo" type="url" placeholder="Optional profile photo link"></label>
+          <label>Emergency Contact<input name="emergencyContact" placeholder="Name and phone"></label>
+          <label class="wide">Address<textarea name="address" rows="2" placeholder="City, state, country"></textarea></label>
+          <label class="wide">Health Notes<textarea name="notes" rows="3" placeholder="Existing conditions, dietary needs, prior yoga experience"></textarea></label>
+        </div>
+        <menu>
+          <button class="secondary-button" id="cancelRegistration" value="cancel" type="button">Cancel</button>
+          <button class="primary-button" value="default" type="submit">Submit Registration</button>
+        </menu>
+      </form>
+    </dialog>
+
+    <dialog id="courseDialog">
+      <form method="dialog" id="courseForm">
+        <div class="modal-header">
+          <div>
+            <p class="eyebrow">Batch Management</p>
+            <h2>Add Batch Schedule</h2>
+          </div>
+          <button class="icon-button" id="closeCourse" value="cancel" aria-label="Close" type="button">x</button>
+        </div>
+        <div class="form-grid">
+          <label class="wide">Batch Name<input name="name" placeholder="Foundation Yoga - June Batch" required></label>
+          <label>Course Master<select name="programId" id="batchProgramSelect" required></select></label>
+          <label>Start Date<input name="start" type="date" required></label>
+          <label>End Date<input name="end" type="date" required></label>
+          <label>Seats<input name="seats" type="number" min="1" max="500" required></label>
+          <label>Teacher<input name="teacher" placeholder="Teacher name" required></label>
+          <label>Program Hall<select name="hallId" id="hallSelect" required></select></label>
+          <label class="wide">Eligibility<textarea name="eligibility" rows="3" placeholder="Age, prior course, health, or practice requirements" required></textarea></label>
+        </div>
+        <menu>
+          <button class="secondary-button" id="cancelCourse" value="cancel" type="button">Cancel</button>
+          <button class="primary-button" value="default" type="submit">Save Batch</button>
+        </menu>
+      </form>
+    </dialog>
+
+    <dialog id="programDialog">
+      <form method="dialog" id="programForm">
+        <div class="modal-header">
+          <div>
+            <p class="eyebrow">Course Master</p>
+            <h2 id="programDialogTitle">Add Course</h2>
+          </div>
+          <button class="icon-button" id="closeProgram" value="cancel" aria-label="Close" type="button">x</button>
+        </div>
+        <input type="hidden" name="id">
+        <div class="form-grid">
+          <label>Course Name<input name="name" required></label>
+          <label>Code<input name="code" required></label>
+          <label>Parent Course<select name="parentId" id="programParentSelect"></select></label>
+          <label>Level<input name="level" placeholder="Family, Level 1, Level 2" required></label>
+          <label>Duration<input name="duration" placeholder="7 days"></label>
+          <label class="wide">Eligibility<textarea name="eligibility" rows="3" required></textarea></label>
+        </div>
+        <menu>
+          <button class="secondary-button" id="cancelProgram" value="cancel" type="button">Cancel</button>
+          <button class="primary-button" value="default" type="submit">Save Course</button>
+        </menu>
+      </form>
+    </dialog>
+
+    <dialog id="teacherDialog">
+      <form method="dialog" id="teacherForm">
+        <div class="modal-header">
+          <div>
+            <p class="eyebrow">Teacher Master</p>
+            <h2 id="teacherDialogTitle">Add Teacher</h2>
+          </div>
+          <button class="icon-button" id="closeTeacher" value="cancel" aria-label="Close" type="button">x</button>
+        </div>
+        <input type="hidden" name="id">
+        <div class="form-grid">
+          <label>Name<input name="name" placeholder="Teacher name" required></label>
+          <label>Speciality<input name="speciality" placeholder="Yoga therapy, SKY, meditation" required></label>
+          <label>Phone<input name="phone" required></label>
+          <label>Email<input name="email" type="email" required></label>
+          <label class="wide">Notes<textarea name="notes" rows="3" placeholder="Certifications, availability, or teaching remarks"></textarea></label>
+        </div>
+        <menu>
+          <button class="secondary-button" id="cancelTeacher" value="cancel" type="button">Cancel</button>
+          <button class="primary-button" value="default" type="submit">Save Teacher</button>
+        </menu>
+      </form>
+    </dialog>
+
+    <dialog id="recordDialog">
+      <form method="dialog" id="recordForm">
+        <div class="modal-header">
+          <div>
+            <p class="eyebrow" id="recordDialogEyebrow">Master</p>
+            <h2 id="recordDialogTitle">Edit Record</h2>
+          </div>
+          <button class="icon-button" id="closeRecord" value="cancel" aria-label="Close" type="button">x</button>
+        </div>
+        <input type="hidden" name="mode">
+        <input type="hidden" name="id">
+        <div class="form-grid" id="recordFields"></div>
+        <menu>
+          <button class="secondary-button" id="cancelRecord" value="cancel" type="button">Cancel</button>
+          <button class="primary-button" value="default" type="submit">Save Record</button>
+        </menu>
+      </form>
+    </dialog>
+
+    <dialog id="attendanceReasonDialog">
+      <form method="dialog" id="attendanceReasonForm">
+        <div class="modal-header">
+          <div>
+            <p class="eyebrow">Attendance</p>
+            <h2 id="attendanceReasonTitle">Mark Attendance</h2>
+          </div>
+          <button class="icon-button" id="closeAttendanceReason" value="cancel" aria-label="Close" type="button">x</button>
+        </div>
+        <input type="hidden" name="participantId">
+        <input type="hidden" name="registrationId">
+        <input type="hidden" name="sessionId">
+        <input type="hidden" name="status">
+        <div class="form-grid">
+          <label class="wide">Reason<textarea name="reason" rows="3" placeholder="Enter reason for late or absent marking" required></textarea></label>
+        </div>
+        <menu>
+          <button class="secondary-button" id="cancelAttendanceReason" value="cancel" type="button">Cancel</button>
+          <button class="primary-button" value="default" type="submit">Save Attendance</button>
+        </menu>
+      </form>
+    </dialog>
+
+    <div id="toast" role="status" aria-live="polite"></div>
+    <script src="app.js?v=34"></script>
+  </body>
+</html>
