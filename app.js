@@ -57,6 +57,10 @@ const seedData = {
 
 const state = loadData();
 let currentSession = loadSession();
+const supabaseClient = createSupabaseClient();
+let hasLoadedRemoteData = !supabaseClient;
+let remoteSaveTimer = null;
+let remoteStatus = supabaseClient ? "Supabase connecting" : "Local browser storage";
 let currentFilter = "all";
 let calendarDate = getInitialCalendarDate();
 let selectedCourseId = "";
@@ -95,6 +99,69 @@ migrateState();
 function loadData() {
   const stored = localStorage.getItem("aliyar-management-data");
   return stored ? JSON.parse(stored) : structuredClone(seedData);
+}
+
+function createSupabaseClient() {
+  const config = window.ALIYAR_SUPABASE || {};
+  const hasConfig = config.url && config.anonKey;
+  if (!hasConfig || !window.supabase?.createClient) return null;
+  return window.supabase.createClient(config.url, config.anonKey);
+}
+
+async function loadRemoteData() {
+  if (!supabaseClient) return;
+  try {
+    remoteStatus = "Loading Supabase data";
+    renderAuthState();
+    const { data, error } = await supabaseClient
+      .from("app_state")
+      .select("payload")
+      .eq("id", "current")
+      .maybeSingle();
+    if (error) throw error;
+    if (data?.payload) {
+      Object.keys(state).forEach((key) => delete state[key]);
+      Object.assign(state, data.payload);
+      migrateState();
+      remoteStatus = "Supabase connected";
+    } else {
+      remoteStatus = "Supabase ready";
+    }
+    hasLoadedRemoteData = true;
+    renderAll();
+    if (!data?.payload) persistRemoteData();
+  } catch (error) {
+    remoteStatus = "Supabase unavailable, using local data";
+    hasLoadedRemoteData = false;
+    renderAuthState();
+    showToast(error.message || "Unable to load Supabase data.");
+  }
+}
+
+function scheduleRemoteSave() {
+  if (!supabaseClient || !hasLoadedRemoteData) return;
+  clearTimeout(remoteSaveTimer);
+  remoteSaveTimer = setTimeout(persistRemoteData, 550);
+}
+
+async function persistRemoteData() {
+  if (!supabaseClient || !hasLoadedRemoteData) return;
+  try {
+    const { error } = await supabaseClient
+      .from("app_state")
+      .upsert({
+        id: "current",
+        payload: state,
+        updated_at: new Date().toISOString()
+      });
+    if (error) throw error;
+    remoteStatus = "Supabase synced";
+    renderAuthState();
+  } catch (error) {
+    remoteStatus = "Supabase save failed";
+    renderAuthState();
+    showToast(error.message || "Unable to save to Supabase.");
+  }
 }
 
 function loadSession() {
@@ -234,6 +301,7 @@ function migrateState() {
 
 function saveData() {
   localStorage.setItem("aliyar-management-data", JSON.stringify(state));
+  scheduleRemoteSave();
 }
 
 function courseName(id) {
@@ -623,9 +691,11 @@ function renderAuthState() {
     <span>Access</span>
     <strong>Public Portal</strong>
     <small>Registration is open without login</small>
+    <small>${remoteStatus}</small>
   ` : `
     <span>Logged in as ${roleLabel}</span>
     <strong>${currentSession.name}</strong>
+    <small>${remoteStatus}</small>
     <button class="ghost-button full" id="logoutButton" type="button">Logout</button>
   `;
 }
@@ -2199,3 +2269,4 @@ renderNav();
 bindEvents();
 renderAll();
 activateView(canAccessView("dashboard") && currentSession.role === "admin" ? "dashboard" : "portal");
+loadRemoteData();

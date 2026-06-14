@@ -7,9 +7,9 @@ This version is a static web app. It can be hosted on Netlify, Vercel, GitHub Pa
 - Files to deploy: `index.html`, `app.js`, `styles.css`
 - Public registration works without login.
 - Role-based login is currently demo/local-browser login.
-- Records are stored in browser `localStorage`.
+- Records are stored in browser `localStorage` unless Supabase is configured.
 
-For real production use with multiple users, the next step is to add a backend API, database, and server-side authentication.
+For real production use with multiple users, configure Supabase first, then replace demo login with Supabase Auth and server-side role policies.
 
 ## Fastest Deployment Options
 
@@ -47,7 +47,7 @@ Passwords are not enforced in this static prototype.
 
 Before using this for real operations:
 
-- Move data from `localStorage` to a database.
+- Configure Supabase using [SUPABASE_SETUP.md](SUPABASE_SETUP.md).
 - Replace demo login with secure authentication.
 - Enforce permissions on the server.
 - Add backup/export workflows.
