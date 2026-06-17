@@ -4,10 +4,10 @@
 
 1. Open Supabase and create a new project.
 2. Go to SQL Editor.
-3. Open [supabase/schema.sql](supabase/schema.sql).
+3. For the current static app sync, open [supabase/app_state_only.sql](supabase/app_state_only.sql).
 4. Run the full SQL script.
 
-This creates the database tables needed for the ERP. The current static app starts by syncing the full application state through `public.app_state`; the normalized tables are included for the next backend migration step.
+This creates the `public.app_state` table used by the current app. The full relational schema is available in [supabase/schema.sql](supabase/schema.sql) for the next backend migration step.
 
 ## 2. Add Project Credentials
 
