@@ -1,0 +1,10 @@
+alter table public.course_masters disable row level security;
+alter table public.teachers disable row level security;
+alter table public.program_halls disable row level security;
+alter table public.accommodation_blocks disable row level security;
+alter table public.accommodation_floors disable row level security;
+alter table public.rooms disable row level security;
+alter table public.batches disable row level security;
+alter table public.participants disable row level security;
+alter table public.registrations disable row level security;
+alter table public.hall_bookings disable row level security;

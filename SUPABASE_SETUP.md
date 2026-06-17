@@ -6,7 +6,7 @@
 2. Go to SQL Editor.
 3. For the current static app sync, open [supabase/app_state_only.sql](supabase/app_state_only.sql).
 4. Run the full SQL script.
-5. Required: to mirror all app records into the Supabase table browser, open and run [supabase/all_tables_sync_policy.sql](supabase/all_tables_sync_policy.sql). Without this step, Supabase will reject inserts with a row-level security error.
+5. Required: to mirror all app records into the Supabase table browser, open and run [supabase/disable_rls_for_demo.sql](supabase/disable_rls_for_demo.sql) for the current prototype. Without this step, Supabase will reject inserts with a row-level security error.
 
 This creates the `public.app_state` table used by the current app. The full relational schema is available in [supabase/schema.sql](supabase/schema.sql) for the next backend migration step.
 
@@ -36,7 +36,7 @@ The first sync step uses temporary demo policies on `public.app_state` so the st
 
 Before production:
 
-- Replace temporary demo policies with authenticated role policies.
+- Re-enable row-level security and replace demo access with authenticated role policies.
 - Move login to Supabase Auth.
 - Migrate app screens from `app_state` JSON sync to normalized tables.
 - Add backup/export jobs.
