@@ -155,7 +155,7 @@ async function persistRemoteData() {
         updated_at: new Date().toISOString()
       });
     if (error) throw error;
-    await syncTeachersTable();
+    await syncRelationalTables();
     remoteStatus = "Supabase synced";
     renderAuthState();
   } catch (error) {
@@ -165,8 +165,31 @@ async function persistRemoteData() {
   }
 }
 
-async function syncTeachersTable() {
+async function replaceSupabaseTable(tableName, rows) {
   if (!supabaseClient) return;
+  const deleteResult = await supabaseClient.from(tableName).delete().neq("id", "__none__");
+  if (deleteResult.error) throw deleteResult.error;
+  if (!rows.length) return;
+  const insertResult = await supabaseClient.from(tableName).insert(rows);
+  if (insertResult.error) throw insertResult.error;
+}
+
+async function syncRelationalTables() {
+  if (!supabaseClient) return;
+  const now = new Date().toISOString();
+  const courseMasterRows = [...state.programs]
+    .sort((a, b) => (a.parentId ? 1 : 0) - (b.parentId ? 1 : 0))
+    .map((program) => ({
+      id: program.id,
+      parent_id: program.parentId || null,
+      code: program.code || "",
+      name: program.name,
+      level: program.level || "",
+      duration: program.duration || "",
+      eligibility: program.eligibility || "",
+      session_templates: program.sessionTemplates || [],
+      updated_at: now
+    }));
   const teacherRows = state.teachers.map((teacher) => ({
     id: teacher.id,
     name: teacher.name,
@@ -175,22 +198,116 @@ async function syncTeachersTable() {
     email: teacher.email || "",
     photo: teacher.photo || "",
     notes: teacher.notes || "",
-    updated_at: new Date().toISOString()
+    updated_at: now
   }));
-  if (teacherRows.length) {
-    const { error } = await supabaseClient.from("teachers").upsert(teacherRows);
-    if (error) throw error;
-  }
-}
+  const hallRows = state.halls.map((hall) => ({
+    id: hall.id,
+    name: hall.name,
+    capacity: Number(hall.capacity) || 1,
+    location: hall.location || "",
+    notes: hall.notes || "",
+    updated_at: now
+  }));
+  const blockRows = state.blocks.map((block) => ({
+    id: block.id,
+    name: block.name,
+    gender: block.gender || "",
+    notes: block.notes || "",
+    updated_at: now
+  }));
+  const floorRows = state.floors.map((floor) => ({
+    id: floor.id,
+    block_id: floor.blockId || null,
+    name: floor.name,
+    updated_at: now
+  }));
+  const roomRows = state.rooms.map((room) => ({
+    id: room.id,
+    block_id: room.blockId || null,
+    floor_id: room.floorId || null,
+    name: room.name,
+    gender: room.gender || "",
+    beds: Number(room.beds) || 1,
+    updated_at: now
+  }));
+  const batchRows = state.courses.map((course) => {
+    const teacher = teacherByName(course.teacher);
+    return {
+      id: course.id,
+      program_id: course.programId || null,
+      name: course.name,
+      start_date: course.start,
+      end_date: course.end,
+      seats: Number(course.seats) || 1,
+      hall_id: course.hallId || null,
+      teacher_id: teacher?.id || null,
+      teacher_name: course.teacher || "",
+      eligibility: course.eligibility || "",
+      sessions: course.sessions || [],
+      updated_at: now
+    };
+  });
+  const participantRows = state.participants.map((participant) => ({
+    id: participant.id,
+    name: participant.name,
+    age: Number(participant.age) || null,
+    gender: participant.gender || "",
+    phone: participant.phone || "",
+    email: participant.email || "",
+    address: participant.address || "",
+    emergency_contact: participant.emergencyContact || "",
+    photo: participant.photo || "",
+    notes: participant.notes || "",
+    program_history: participant.programHistory || [],
+    updated_at: now
+  }));
+  const registrationRows = allRegistrationRows().map(({ participant, registration }) => ({
+    id: registration.id,
+    participant_id: participant.id,
+    batch_id: registration.courseId || null,
+    status: registration.status || "Pending",
+    eligible: Boolean(registration.eligible),
+    room_id: registration.roomId || null,
+    checked_in: Boolean(registration.checkedIn),
+    attendance: Number(registration.attendance) || 0,
+    completion: registration.completion || "Pending",
+    certificate: Boolean(registration.certificate),
+    session_attendance: registration.sessionAttendance || [],
+    notes: registration.notes || "",
+    registered_on: registration.registeredOn || new Date().toISOString().slice(0, 10),
+    updated_at: now
+  }));
+  const hallBookingRows = state.hallBookings.map((booking) => ({
+    id: booking.id,
+    batch_id: booking.courseId || null,
+    hall_id: booking.hallId || null,
+    start_date: booking.start,
+    end_date: booking.end,
+    notes: booking.notes || "",
+    updated_at: now
+  }));
 
-async function deleteTeacherRowFromSupabase(teacherId) {
-  if (!supabaseClient || !hasLoadedRemoteData) return;
-  const { error } = await supabaseClient.from("teachers").delete().eq("id", teacherId);
-  if (error) {
-    remoteStatus = "Supabase teacher delete failed";
-    renderAuthState();
-    showToast(error.message || "Unable to delete teacher in Supabase.");
-  }
+  await replaceSupabaseTable("hall_bookings", []);
+  await replaceSupabaseTable("registrations", []);
+  await replaceSupabaseTable("batches", []);
+  await replaceSupabaseTable("rooms", []);
+  await replaceSupabaseTable("accommodation_floors", []);
+  await replaceSupabaseTable("accommodation_blocks", []);
+  await replaceSupabaseTable("participants", []);
+  await replaceSupabaseTable("program_halls", []);
+  await replaceSupabaseTable("teachers", []);
+  await replaceSupabaseTable("course_masters", []);
+
+  await replaceSupabaseTable("course_masters", courseMasterRows);
+  await replaceSupabaseTable("teachers", teacherRows);
+  await replaceSupabaseTable("program_halls", hallRows);
+  await replaceSupabaseTable("accommodation_blocks", blockRows);
+  await replaceSupabaseTable("accommodation_floors", floorRows);
+  await replaceSupabaseTable("rooms", roomRows);
+  await replaceSupabaseTable("batches", batchRows);
+  await replaceSupabaseTable("participants", participantRows);
+  await replaceSupabaseTable("registrations", registrationRows);
+  await replaceSupabaseTable("hall_bookings", hallBookingRows);
 }
 
 function loadSession() {
@@ -1524,7 +1641,6 @@ function deleteTeacher(teacherId) {
     return;
   }
   state.teachers = state.teachers.filter((item) => item.id !== teacherId);
-  deleteTeacherRowFromSupabase(teacherId);
   renderAll();
   showToast("Teacher deleted.");
 }
