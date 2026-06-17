@@ -6,6 +6,7 @@
 2. Go to SQL Editor.
 3. For the current static app sync, open [supabase/app_state_only.sql](supabase/app_state_only.sql).
 4. Run the full SQL script.
+5. To mirror Teacher Master rows into the Supabase table browser, open and run [supabase/teacher_sync_policy.sql](supabase/teacher_sync_policy.sql).
 
 This creates the `public.app_state` table used by the current app. The full relational schema is available in [supabase/schema.sql](supabase/schema.sql) for the next backend migration step.
 

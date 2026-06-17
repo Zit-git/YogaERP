@@ -155,12 +155,41 @@ async function persistRemoteData() {
         updated_at: new Date().toISOString()
       });
     if (error) throw error;
+    await syncTeachersTable();
     remoteStatus = "Supabase synced";
     renderAuthState();
   } catch (error) {
     remoteStatus = "Supabase save failed";
     renderAuthState();
     showToast(error.message || "Unable to save to Supabase.");
+  }
+}
+
+async function syncTeachersTable() {
+  if (!supabaseClient) return;
+  const teacherRows = state.teachers.map((teacher) => ({
+    id: teacher.id,
+    name: teacher.name,
+    speciality: teacher.speciality || "",
+    phone: teacher.phone || "",
+    email: teacher.email || "",
+    photo: teacher.photo || "",
+    notes: teacher.notes || "",
+    updated_at: new Date().toISOString()
+  }));
+  if (teacherRows.length) {
+    const { error } = await supabaseClient.from("teachers").upsert(teacherRows);
+    if (error) throw error;
+  }
+}
+
+async function deleteTeacherRowFromSupabase(teacherId) {
+  if (!supabaseClient || !hasLoadedRemoteData) return;
+  const { error } = await supabaseClient.from("teachers").delete().eq("id", teacherId);
+  if (error) {
+    remoteStatus = "Supabase teacher delete failed";
+    renderAuthState();
+    showToast(error.message || "Unable to delete teacher in Supabase.");
   }
 }
 
@@ -1495,6 +1524,7 @@ function deleteTeacher(teacherId) {
     return;
   }
   state.teachers = state.teachers.filter((item) => item.id !== teacherId);
+  deleteTeacherRowFromSupabase(teacherId);
   renderAll();
   showToast("Teacher deleted.");
 }
