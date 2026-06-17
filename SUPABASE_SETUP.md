@@ -6,7 +6,7 @@
 2. Go to SQL Editor.
 3. For the current static app sync, open [supabase/app_state_only.sql](supabase/app_state_only.sql).
 4. Run the full SQL script.
-5. To mirror all app records into the Supabase table browser, open and run [supabase/all_tables_sync_policy.sql](supabase/all_tables_sync_policy.sql).
+5. Required: to mirror all app records into the Supabase table browser, open and run [supabase/all_tables_sync_policy.sql](supabase/all_tables_sync_policy.sql). Without this step, Supabase will reject inserts with a row-level security error.
 
 This creates the `public.app_state` table used by the current app. The full relational schema is available in [supabase/schema.sql](supabase/schema.sql) for the next backend migration step.
 

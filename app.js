@@ -129,7 +129,7 @@ async function loadRemoteData() {
     }
     hasLoadedRemoteData = true;
     renderAll();
-    if (!data?.payload) persistRemoteData();
+    persistRemoteData();
   } catch (error) {
     remoteStatus = "Supabase unavailable, using local data";
     hasLoadedRemoteData = false;
