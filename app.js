@@ -842,6 +842,11 @@ function roleById(roleId) {
   return accessRoles.find((role) => role.id === roleId) || null;
 }
 
+function isTeacherRole(roleId) {
+  const role = roleById(roleId);
+  return roleId === "teacher" || role?.name?.toLowerCase().includes("teacher");
+}
+
 function permissionsForRole(role) {
   if (!role) return [];
   return [
@@ -1113,7 +1118,6 @@ function renderPermissionChrome() {
   const adminControls = [
     "#addProgram",
     "#addCourse",
-    "#addTeacherFromView",
     "#addAccommodationRecord",
     "#autoAssign",
     "#addHall",
@@ -1387,8 +1391,7 @@ function renderTeachers() {
         <td>${programs.length ? programs.map((course) => `<span class="pill">${course.name}</span>`).join(" ") : "<span class=\"muted\">No programs assigned</span>"}</td>
         <td>
           ${canManageMasters() ? `<div class="row-actions">
-            <button class="secondary-button" type="button" data-teacher-edit="${teacher.id}">Edit</button>
-            <button class="danger-button" type="button" data-teacher-delete="${teacher.id}">Delete</button>
+            <button class="secondary-button" type="button" data-teacher-edit="${teacher.id}">Edit Profile</button>
           </div>` : "<span class=\"muted\">View only</span>"}
         </td>
       </tr>
@@ -1962,29 +1965,16 @@ function openTeacherDialog(teacherId = "") {
   if (teacherId) {
     const teacher = state.teachers.find((item) => item.id === teacherId);
     if (!teacher) return;
-    $("#teacherDialogTitle").textContent = "Edit Teacher";
+    $("#teacherDialogTitle").textContent = "Edit Teacher Profile";
     form.elements.name.value = teacher.name;
     form.elements.speciality.value = teacher.speciality;
     form.elements.phone.value = teacher.phone;
     form.elements.email.value = teacher.email;
     form.elements.notes.value = teacher.notes || "";
   } else {
-    $("#teacherDialogTitle").textContent = "Add Teacher";
+    $("#teacherDialogTitle").textContent = "Edit Teacher Profile";
   }
   $("#teacherDialog").showModal();
-}
-
-function deleteTeacher(teacherId) {
-  const teacher = state.teachers.find((item) => item.id === teacherId);
-  if (!teacher) return;
-  const assigned = state.courses.filter((course) => course.teacher === teacher.name).length;
-  if (assigned > 0) {
-    showToast("Cannot delete a teacher assigned to scheduled programs.");
-    return;
-  }
-  state.teachers = state.teachers.filter((item) => item.id !== teacherId);
-  renderAll();
-  showToast("Teacher deleted.");
 }
 
 function addOrEditBlock(blockId = "") {
@@ -2062,9 +2052,12 @@ function openAccessUserDialog(userId = "") {
   form.querySelector(".password-field").hidden = Boolean(user);
   form.elements.password.required = !user;
   if (user) {
+    const linkedTeacher = state.teachers.find((teacher) => teacher.id === user.linked_teacher_id);
     form.elements.displayName.value = user.display_name || "";
     form.elements.email.value = user.login_email || "";
     form.elements.roleId.value = user.role_id || accessRoles[0]?.id || "";
+    form.elements.phone.value = linkedTeacher?.phone || "";
+    form.elements.teacherSpeciality.value = linkedTeacher?.speciality || "";
     form.elements.linkedTeacherId.value = user.linked_teacher_id || "";
     form.elements.linkedParticipantId.value = user.linked_participant_id || "";
     form.elements.active.checked = Boolean(user.active);
@@ -2149,12 +2142,46 @@ async function saveAccessUser(form) {
     }
     userId = signup.data.user.id;
   }
+  const roleId = data.get("roleId");
+  let linkedTeacherId = data.get("linkedTeacherId") || null;
+  if (isTeacherRole(roleId) && !linkedTeacherId) {
+    linkedTeacherId = `teacher-${userId}`;
+  }
+  if (isTeacherRole(roleId) && linkedTeacherId) {
+    const teacherPayload = {
+      id: linkedTeacherId,
+      name: data.get("displayName").trim(),
+      speciality: data.get("teacherSpeciality").trim() || "Faculty",
+      phone: data.get("phone").trim(),
+      email: data.get("email").trim(),
+      photo: "",
+      notes: "Created from user access",
+      updated_at: new Date().toISOString()
+    };
+    const teacherResult = await supabaseClient.from("teachers").upsert(teacherPayload);
+    if (teacherResult.error) {
+      showToast(teacherResult.error.message || "Unable to save teacher profile.");
+      return;
+    }
+    const existingTeacher = state.teachers.find((teacher) => teacher.id === linkedTeacherId);
+    const teacherState = {
+      id: teacherPayload.id,
+      name: teacherPayload.name,
+      speciality: teacherPayload.speciality,
+      phone: teacherPayload.phone,
+      email: teacherPayload.email,
+      photo: teacherPayload.photo,
+      notes: teacherPayload.notes
+    };
+    if (existingTeacher) Object.assign(existingTeacher, teacherState);
+    else state.teachers.push(teacherState);
+  }
   const payload = {
     user_id: userId,
-    role_id: data.get("roleId"),
+    role_id: roleId,
     display_name: data.get("displayName").trim(),
     login_email: data.get("email").trim(),
-    linked_teacher_id: data.get("linkedTeacherId") || null,
+    linked_teacher_id: isTeacherRole(roleId) ? linkedTeacherId : null,
     linked_participant_id: data.get("linkedParticipantId") || null,
     active: data.has("active"),
     updated_at: new Date().toISOString()
@@ -2414,7 +2441,6 @@ function deleteProgram(programId) {
 function bindEvents() {
   $("#addCourse").addEventListener("click", () => canManageMasters() && $("#courseDialog").showModal());
   $("#addProgram").addEventListener("click", () => canManageMasters() && openProgramDialog());
-  $("#addTeacherFromView").addEventListener("click", () => canManageMasters() && openTeacherDialog());
   $("#addParticipantFromMaster").addEventListener("click", () => $("#registrationDialog").showModal());
   $("#forgotPasswordButton").addEventListener("click", () => $("#forgotPasswordDialog").showModal());
   $("#previousMonth").addEventListener("click", () => {
@@ -2634,12 +2660,6 @@ function bindEvents() {
     if (editTeacher) {
       if (!canManageMasters()) return;
       openTeacherDialog(editTeacher.dataset.teacherEdit);
-      return;
-    }
-    const deleteTeacherButton = event.target.closest("[data-teacher-delete]");
-    if (deleteTeacherButton) {
-      if (!canManageMasters()) return;
-      deleteTeacher(deleteTeacherButton.dataset.teacherDelete);
       return;
     }
     const editBlock = event.target.closest("[data-block-edit]");

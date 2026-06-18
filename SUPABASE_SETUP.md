@@ -42,6 +42,7 @@ Login is controlled by Supabase Authentication. Role definitions and app permiss
 - Choose the user's role from `public.roles.id`.
 - Admin users can manage roles and user assignments from the app menu: **Users & Roles**.
 - To create users from the app, keep email/password signups enabled in **Supabase Authentication > Providers > Email**.
+- Teachers should be created from **Users & Roles** by assigning the Teacher role. The app creates and links the teacher profile automatically.
 
 For the admin user, run [supabase/auth_user_roles.sql](supabase/auth_user_roles.sql) after replacing the email placeholder.
 If your existing Supabase project already has `public.user_roles.role`, run [supabase/migrate_user_roles_to_role_master.sql](supabase/migrate_user_roles_to_role_master.sql) once. It creates the Roles Master, copies existing role values to `role_id`, and removes the old role/permission columns from `public.user_roles`.

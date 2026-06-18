@@ -186,9 +186,8 @@
         <div class="section-toolbar">
           <div>
             <h2>Teacher Master</h2>
-            <p>Maintain faculty records, contact details, specialities, and program assignments.</p>
+            <p>View faculty profiles, contact details, specialities, and program assignments.</p>
           </div>
-          <button class="primary-button" id="addTeacherFromView" type="button">Add Teacher</button>
         </div>
         <div class="teachers-master-layout">
           <div class="table-wrap">
@@ -497,7 +496,7 @@
         <div class="modal-header">
           <div>
             <p class="eyebrow">Teacher Master</p>
-            <h2 id="teacherDialogTitle">Add Teacher</h2>
+            <h2 id="teacherDialogTitle">Edit Teacher Profile</h2>
           </div>
           <button class="icon-button" id="closeTeacher" value="cancel" aria-label="Close" type="button">x</button>
         </div>
@@ -550,6 +549,8 @@
           <label>Email<input name="email" type="email" required></label>
           <label class="password-field">Temporary Password<input name="password" type="password" minlength="6"></label>
           <label>Role<select name="roleId" id="accessUserRoleSelect" required></select></label>
+          <label>Phone<input name="phone" placeholder="Optional"></label>
+          <label>Teacher Speciality<input name="teacherSpeciality" placeholder="Required for teacher users"></label>
           <label>Linked Teacher<select name="linkedTeacherId" id="accessUserTeacherSelect"></select></label>
           <label>Linked Participant<select name="linkedParticipantId" id="accessUserParticipantSelect"></select></label>
           <label class="checkbox-label"><input name="active" type="checkbox" checked> Active login access</label>
@@ -613,6 +614,6 @@
     <div id="toast" role="status" aria-live="polite"></div>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="supabase-config.js?v=35"></script>
-    <script src="app.js?v=54"></script>
+    <script src="app.js?v=55"></script>
   </body>
 </html>
