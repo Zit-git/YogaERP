@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Aliyar Program Management</title>
     <link rel="icon" href="favicon.svg" type="image/svg+xml">
-    <link rel="stylesheet" href="styles.css?v=40">
+    <link rel="stylesheet" href="styles.css?v=45">
   </head>
   <body>
     <aside class="sidebar" aria-label="Primary navigation">
@@ -39,10 +39,23 @@
           <section class="panel">
             <div class="panel-header">
               <div>
-                <h2>Available Programs</h2>
-                <span class="muted">Public program listing and registration entry</span>
+                <h2>Upcoming Programs</h2>
               </div>
               <button class="primary-button" id="portalRegistration" type="button">Register Without Login</button>
+            </div>
+            <div class="portal-controls">
+              <label class="search-box portal-filter">
+                <span>Filter</span>
+                <input id="portalProgramFilter" type="search" placeholder="Program name or eligibility">
+              </label>
+              <label class="search-box portal-sort">
+                <span>Sort</span>
+                <select id="portalProgramSort">
+                  <option value="startAsc">Start date</option>
+                  <option value="startDesc">Latest first</option>
+                  <option value="nameAsc">Program name</option>
+                </select>
+              </label>
             </div>
             <div class="table-wrap flat-table">
               <table>
@@ -50,9 +63,6 @@
                   <tr>
                     <th>Program</th>
                     <th>Dates</th>
-                    <th>Teacher</th>
-                    <th>Seats</th>
-                    <th>Hall</th>
                     <th>Action</th>
                   </tr>
                 </thead>
@@ -469,6 +479,6 @@
     <div id="toast" role="status" aria-live="polite"></div>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="supabase-config.js?v=35"></script>
-    <script src="app.js?v=44"></script>
+    <script src="app.js?v=45"></script>
   </body>
 </html>

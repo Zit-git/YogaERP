@@ -20,6 +20,8 @@ let usersLoadError = "";
 let remoteSaveTimer = null;
 let remoteStatus = supabaseClient ? "Supabase connecting" : "Supabase not configured";
 let currentFilter = "all";
+let portalProgramFilter = "";
+let portalProgramSort = "startAsc";
 let calendarDate = getInitialCalendarDate();
 let selectedCourseId = "";
 let selectedParticipantId = "";
@@ -966,7 +968,7 @@ function applyProgramLifecycleStatuses() {
 }
 
 function isPortalProgram(course) {
-  return programLifecycleStatus(course) !== "Completed";
+  return programLifecycleStatus(course) === "Upcoming";
 }
 
 function showToast(message) {
@@ -1060,20 +1062,26 @@ function renderAuthState() {
 }
 
 function renderPortal() {
-  const upcomingPrograms = state.courses.filter(isPortalProgram);
+  const filterText = portalProgramFilter.trim().toLowerCase();
+  const upcomingPrograms = state.courses
+    .filter(isPortalProgram)
+    .filter((course) => {
+      if (!filterText) return true;
+      return [course.name, course.eligibility, course.start, course.end].join(" ").toLowerCase().includes(filterText);
+    })
+    .sort((a, b) => {
+      if (portalProgramSort === "startDesc") return dateFromInput(b.start) - dateFromInput(a.start);
+      if (portalProgramSort === "nameAsc") return a.name.localeCompare(b.name);
+      return dateFromInput(a.start) - dateFromInput(b.start);
+    });
   const rows = upcomingPrograms.map((course) => {
-    const registered = allRegistrationRows().filter(({ registration }) => registration.courseId === course.id).length;
-    const teacher = teacherByName(course.teacher);
     return `<tr>
       <td><strong>${course.name}</strong><br><span class="muted">${course.eligibility}</span><br><span class="pill ${statusClass(course.status || programLifecycleStatus(course))}">${course.status || programLifecycleStatus(course)}</span></td>
       <td>${course.start}<br><span class="muted">${course.end}</span></td>
-      <td>${teacher ? `<button class="text-link-button" type="button" data-linked-teacher="${teacher.id}">${course.teacher}</button>` : course.teacher}</td>
-      <td>${registered}/${course.seats}</td>
-      <td>${course.hall}</td>
       <td><button class="secondary-button" type="button" data-public-register="${course.id}">Register</button></td>
     </tr>`;
   }).join("");
-  $("#portalBatchRows").innerHTML = rows || `<tr><td colspan="6"><span class="muted">No upcoming programs are open for registration.</span></td></tr>`;
+  $("#portalBatchRows").innerHTML = rows || `<tr><td colspan="3"><span class="muted">No upcoming programs are open for registration.</span></td></tr>`;
 }
 
 function renderPermissionChrome() {
@@ -1096,6 +1104,8 @@ function renderPermissionChrome() {
     const element = $(selector);
     if (element) element.hidden = currentSession.role === "participant";
   });
+  const globalSearch = $(".search-box");
+  if (globalSearch) globalSearch.hidden = currentSession.role === "public";
 }
 
 function renderMetrics() {
@@ -2161,7 +2171,13 @@ function deleteProgram(programId) {
 
 function bindEvents() {
   $("#openRegistration").addEventListener("click", () => $("#registrationDialog").showModal());
-  $("#portalRegistration").addEventListener("click", () => $("#registrationDialog").showModal());
+  $("#portalRegistration").addEventListener("click", () => {
+    if (!state.courses.some(isPortalProgram)) {
+      showToast("No upcoming programs are open for registration.");
+      return;
+    }
+    $("#registrationDialog").showModal();
+  });
   $("#addCourse").addEventListener("click", () => canManageMasters() && $("#courseDialog").showModal());
   $("#addProgram").addEventListener("click", () => canManageMasters() && openProgramDialog());
   $("#addTeacherFromView").addEventListener("click", () => canManageMasters() && openTeacherDialog());
@@ -2189,6 +2205,14 @@ function bindEvents() {
   $("#addHallBooking").addEventListener("click", () => canManageMasters() && addOrEditHallBooking());
   $("#generateCertificates").addEventListener("click", () => canManageMasters() && generateCertificates());
   $("#globalSearch").addEventListener("input", renderRegistrations);
+  $("#portalProgramFilter").addEventListener("input", (event) => {
+    portalProgramFilter = event.currentTarget.value;
+    renderPortal();
+  });
+  $("#portalProgramSort").addEventListener("change", (event) => {
+    portalProgramSort = event.currentTarget.value;
+    renderPortal();
+  });
   $("#registrationFilter").addEventListener("click", (event) => {
     const button = event.target.closest("button[data-filter]");
     if (!button) return;

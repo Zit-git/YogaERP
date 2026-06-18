@@ -291,6 +291,17 @@ textarea { resize: vertical; }
   align-items: start;
 }
 
+.portal-controls {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(180px, 240px);
+  gap: 12px;
+  margin: 12px 0;
+}
+
+.portal-controls .search-box {
+  width: 100%;
+}
+
 .login-panel {
   position: sticky;
   top: 22px;
@@ -1188,6 +1199,7 @@ menu {
   .app-shell { padding: 16px; }
   .topbar, .top-actions, .section-toolbar, .panel-header { display: grid; }
   .search-box { width: 100%; }
+  .portal-controls { grid-template-columns: 1fr; }
   nav, .metric-grid, .status-strip, .card-grid, .room-grid, .kanban, .teacher-grid, .form-grid, .workflow-row { grid-template-columns: 1fr; }
   .profile-card { grid-template-columns: 1fr; }
   .profile-photo { width: 132px; }
