@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Aliyar Course & Batch Management</title>
+    <title>Aliyar Program Management</title>
     <link rel="icon" href="favicon.svg" type="image/svg+xml">
     <link rel="stylesheet" href="styles.css?v=35">
   </head>
@@ -30,18 +30,18 @@
         <div class="top-actions">
           <label class="search-box">
             <span>Search</span>
-            <input id="globalSearch" type="search" placeholder="Participant, batch, room">
+            <input id="globalSearch" type="search" placeholder="Participant, program, room">
           </label>
           <button class="primary-button" id="openRegistration" type="button">New Registration</button>
         </div>
       </header>
-      <section id="portal" class="view is-active" data-title="Batch Portal">
+      <section id="portal" class="view is-active" data-title="Program Portal">
         <div class="portal-layout">
           <section class="panel">
             <div class="panel-header">
               <div>
-                <h2>Available Batches</h2>
-                <span class="muted">Public batch listing and registration entry</span>
+                <h2>Available Programs</h2>
+                <span class="muted">Public program listing and registration entry</span>
               </div>
               <button class="primary-button" id="portalRegistration" type="button">Register Without Login</button>
             </div>
@@ -49,7 +49,7 @@
               <table>
                 <thead>
                   <tr>
-                    <th>Batch</th>
+                    <th>Program</th>
                     <th>Dates</th>
                     <th>Teacher</th>
                     <th>Seats</th>
@@ -93,8 +93,8 @@
         <section class="panel section-panel calendar-panel">
           <div class="panel-header">
             <div>
-              <h2>Batch Calendar</h2>
-              <span class="muted">Scheduled residential batches by month</span>
+              <h2>Program Calendar</h2>
+              <span class="muted">Scheduled residential programs by month</span>
             </div>
             <div class="calendar-controls">
               <button class="secondary-button" id="previousMonth" type="button">Previous</button>
@@ -146,20 +146,20 @@
         </div>
       </section>
 
-      <section id="courses" class="view" data-title="Batch Management">
+      <section id="courses" class="view" data-title="Program Management">
         <div class="section-toolbar">
           <div>
-            <h2>Batches & Schedules</h2>
-            <p>Create scheduled course batches, intake limits, teachers, halls, and dates.</p>
+            <h2>Programs & Schedules</h2>
+            <p>Create scheduled residential programs, intake limits, teachers, halls, and dates.</p>
           </div>
-          <button class="primary-button" id="addCourse" type="button">Add Batch</button>
+          <button class="primary-button" id="addCourse" type="button">Add Program</button>
         </div>
         <div class="batches-master-layout">
           <div class="table-wrap">
             <table>
               <thead>
                 <tr>
-                  <th>Batch</th>
+                  <th>Program</th>
                   <th>Schedule</th>
                   <th>Teacher</th>
                   <th>Seats</th>
@@ -172,7 +172,7 @@
           <section class="panel batch-detail-panel">
             <div class="panel-header">
               <div>
-                <h2>Batch Detail</h2>
+                <h2>Program Detail</h2>
                 <span class="muted">Schedule, teacher, participants, and daily attendance</span>
               </div>
             </div>
@@ -185,7 +185,7 @@
         <div class="section-toolbar">
           <div>
             <h2>Teacher Master</h2>
-            <p>Maintain faculty records, contact details, specialities, and batch assignments.</p>
+            <p>Maintain faculty records, contact details, specialities, and program assignments.</p>
           </div>
           <button class="primary-button" id="addTeacherFromView" type="button">Add Teacher</button>
         </div>
@@ -197,7 +197,7 @@
                   <th>Teacher</th>
                   <th>Speciality</th>
                   <th>Contact</th>
-                  <th>Batches</th>
+                  <th>Programs</th>
                   <th>Actions</th>
                 </tr>
               </thead>
@@ -230,7 +230,7 @@
               <thead>
                 <tr>
                   <th>Participant</th>
-                  <th>Batch</th>
+                  <th>Program</th>
                   <th>Completion</th>
                   <th>Accommodation</th>
                 </tr>
@@ -268,7 +268,7 @@
             <thead>
               <tr>
                 <th>Name</th>
-                <th>Batch</th>
+                <th>Program</th>
                 <th>Status</th>
                 <th>Eligibility</th>
                 <th>Room</th>
@@ -298,52 +298,22 @@
         <div id="accommodationContent"></div>
       </section>
 
-      <section id="halls" class="view" data-title="Program Hall Master">
+      <section id="halls" class="view" data-title="Program Halls">
         <div class="section-toolbar">
           <div>
-            <h2>Program Hall Master</h2>
+            <h2>Program Halls</h2>
             <p>Maintain program halls, capacity, location, and remarks.</p>
           </div>
-          <button class="primary-button" id="addHall" type="button">Add Hall</button>
-        </div>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Hall</th>
-                <th>Capacity</th>
-                <th>Location</th>
-                <th>Notes</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody id="hallRows"></tbody>
-          </table>
-        </div>
-      </section>
-
-      <section id="hallBookings" class="view" data-title="Program Hall Bookings">
-        <div class="section-toolbar">
-          <div>
-            <h2>Program Hall Bookings</h2>
-            <p>Allot batches to halls and track booking dates.</p>
+          <div class="row-actions">
+            <button class="primary-button" id="addHall" type="button">Add Hall</button>
+            <button class="primary-button" id="addHallBooking" type="button">Add Booking</button>
           </div>
-          <button class="primary-button" id="addHallBooking" type="button">Add Booking</button>
         </div>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Batch</th>
-                <th>Hall</th>
-                <th>Dates</th>
-                <th>Notes</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody id="hallBookingRows"></tbody>
-          </table>
+        <div class="segmented subnav" id="hallTabs">
+          <button class="is-selected" data-hall-tab="halls" type="button">Halls</button>
+          <button data-hall-tab="bookings" type="button">Bookings</button>
         </div>
+        <div id="hallContent"></div>
       </section>
 
       <section id="certificates" class="view" data-title="Completion & Certificates">
@@ -357,15 +327,6 @@
         <div id="certificateList" class="stack"></div>
       </section>
 
-      <section id="history" class="view" data-title="Participant History">
-        <div class="section-toolbar">
-          <div>
-            <h2>Participant History</h2>
-            <p>Search past batches, attendance, dropouts, certificates, and room stays.</p>
-          </div>
-        </div>
-        <div id="historyList" class="stack"></div>
-      </section>
     </main>
 
     <dialog id="registrationDialog">
@@ -387,7 +348,7 @@
               <option>Other</option>
             </select>
           </label>
-          <label>Batch<select name="course" id="courseSelect"></select></label>
+          <label>Program<select name="course" id="courseSelect"></select></label>
           <label>Phone<input name="phone" required></label>
           <label>Email<input name="email" type="email" required></label>
           <label>Photo URL<input name="photo" type="url" placeholder="Optional profile photo link"></label>
@@ -406,13 +367,13 @@
       <form method="dialog" id="courseForm">
         <div class="modal-header">
           <div>
-            <p class="eyebrow">Batch Management</p>
-            <h2>Add Batch Schedule</h2>
+            <p class="eyebrow">Program Management</p>
+            <h2>Add Program Schedule</h2>
           </div>
           <button class="icon-button" id="closeCourse" value="cancel" aria-label="Close" type="button">x</button>
         </div>
         <div class="form-grid">
-          <label class="wide">Batch Name<input name="name" placeholder="Foundation Yoga - June Batch" required></label>
+          <label class="wide">Program Name<input name="name" placeholder="Foundation Yoga - June Program" required></label>
           <label>Course Master<select name="programId" id="batchProgramSelect" required></select></label>
           <label>Start Date<input name="start" type="date" required></label>
           <label>End Date<input name="end" type="date" required></label>
@@ -423,7 +384,7 @@
         </div>
         <menu>
           <button class="secondary-button" id="cancelCourse" value="cancel" type="button">Cancel</button>
-          <button class="primary-button" value="default" type="submit">Save Batch</button>
+          <button class="primary-button" value="default" type="submit">Save Program</button>
         </menu>
       </form>
     </dialog>

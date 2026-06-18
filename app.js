@@ -35,12 +35,12 @@ const seedData = {
     { id: "h3", name: "Arivu Thirukovil", capacity: 35, location: "Temple Block", notes: "Advanced practice hall" }
   ],
   hallBookings: [
-    { id: "hb1", courseId: "c1", hallId: "h1", start: "2026-06-10", end: "2026-06-16", notes: "Full batch allocation" },
-    { id: "hb2", courseId: "c2", hallId: "h2", start: "2026-06-18", end: "2026-06-24", notes: "Full batch allocation" },
-    { id: "hb3", courseId: "c3", hallId: "h3", start: "2026-07-02", end: "2026-07-08", notes: "Full batch allocation" }
+    { id: "hb1", courseId: "c1", hallId: "h1", start: "2026-06-10", end: "2026-06-16", notes: "Full program allocation" },
+    { id: "hb2", courseId: "c2", hallId: "h2", start: "2026-06-18", end: "2026-06-24", notes: "Full program allocation" },
+    { id: "hb3", courseId: "c3", hallId: "h3", start: "2026-07-02", end: "2026-07-08", notes: "Full program allocation" }
   ],
   teachers: [
-    { id: "t1", name: "Dr. Meenakshi", speciality: "Foundation yoga and residential orientation", phone: "9876501011", email: "meenakshi@example.com", notes: "Lead faculty for beginner batches" },
+    { id: "t1", name: "Dr. Meenakshi", speciality: "Foundation yoga and residential orientation", phone: "9876501011", email: "meenakshi@example.com", notes: "Lead faculty for beginner programs" },
     { id: "t2", name: "Prof. Arun", speciality: "Kaya Kalpa and SKY practice", phone: "9876501012", email: "arun@example.com", notes: "Handles eligibility interviews" },
     { id: "t3", name: "Smt. Lalitha", speciality: "Advanced meditation", phone: "9876501013", email: "lalitha@example.com", notes: "Certificate approval reviewer" }
   ],
@@ -50,7 +50,7 @@ const seedData = {
     { id: "p3", name: "Sofia Thomas", age: 29, gender: "Female", courseId: "c2", phone: "9876500013", email: "sofia@example.com", status: "Pending", eligible: false, roomId: "", checkedIn: false, attendance: 0, completion: "Pending", certificate: false, address: "Kochi, Kerala", emergencyContact: "Thomas - 9876501030", photo: "", notes: "Needs eligibility review", programHistory: [] },
     { id: "p4", name: "Ramesh Kumar", age: 55, gender: "Male", courseId: "c2", phone: "9876500014", email: "ramesh@example.com", status: "Waitlist", eligible: true, roomId: "", checkedIn: false, attendance: 0, completion: "Pending", certificate: false, address: "Madurai, Tamil Nadu", emergencyContact: "Lakshmi - 9876501040", photo: "", notes: "", programHistory: [] },
     { id: "p5", name: "Leela Narayanan", age: 48, gender: "Female", courseId: "c3", phone: "9876500015", email: "leela@example.com", status: "Confirmed", eligible: true, roomId: "r2", checkedIn: true, attendance: 7, completion: "Completed", certificate: true, address: "Chennai, Tamil Nadu", emergencyContact: "Narayanan - 9876501050", photo: "", notes: "Certificate issued", programHistory: [
-      { programName: "Foundation Yoga", batchName: "Foundation Yoga - March Batch", start: "2026-03-04", end: "2026-03-10", completion: "Completed", attendance: 7, certificate: true, accommodation: "Block A - Room 104" }
+      { programName: "Foundation Yoga", batchName: "Foundation Yoga - March Program", start: "2026-03-04", end: "2026-03-10", completion: "Completed", attendance: 7, certificate: true, accommodation: "Block A - Room 104" }
     ] }
   ]
 };
@@ -68,26 +68,25 @@ let selectedParticipantId = "";
 let selectedTeacherId = "";
 let linkBackStack = [];
 let accommodationTab = "blocks";
+let hallTab = "halls";
 
 const views = [
   ["portal", "Portal"],
   ["dashboard", "Dashboard"],
   ["programs", "Courses"],
-  ["courses", "Batches"],
+  ["courses", "Programs"],
   ["teachers", "Teachers"],
   ["participants", "Participants"],
   ["registrations", "Registrations"],
   ["accommodation", "Accommodation"],
-  ["halls", "Halls"],
-  ["hallBookings", "Hall Bookings"],
-  ["certificates", "Certificates"],
-  ["history", "History"]
+  ["halls", "Program Halls"],
+  ["certificates", "Certificates"]
 ];
 
 const roleViews = {
   public: ["portal"],
-  participant: ["courses", "participants", "history"],
-  teacher: ["dashboard", "courses", "teachers", "participants", "history"],
+  participant: ["courses", "participants"],
+  teacher: ["dashboard", "courses", "teachers", "participants"],
   admin: views.filter(([id]) => id !== "portal").map(([id]) => id)
 };
 
@@ -351,6 +350,9 @@ function migrateState() {
   if (!Array.isArray(state.hallBookings) || state.hallBookings.length === 0) {
     state.hallBookings = structuredClone(seedData.hallBookings);
   }
+  state.hallBookings.forEach((booking) => {
+    booking.notes = (booking.notes || "").replaceAll("batch", "program").replaceAll("Batch", "Program");
+  });
   state.rooms.forEach((room) => {
     if (!room.blockId) {
       room.blockId = room.name.includes("Block A") ? "b1" : room.name.includes("Block B") ? "b2" : "b3";
@@ -371,6 +373,7 @@ function migrateState() {
   });
   state.teachers.forEach((teacher) => {
     teacher.photo ||= "";
+    teacher.notes = (teacher.notes || "").replaceAll("batches", "programs").replaceAll("Batches", "Programs");
   });
   const participantDefaults = {
     p1: ["Coimbatore, Tamil Nadu", "Raman - 9876501010"],
@@ -413,10 +416,10 @@ function migrateState() {
       }
       updateRegistrationCompletion(registration);
     });
-    if (participant.id === "p5" && !participant.programHistory.some((program) => program.batchName === "Foundation Yoga - March Batch")) {
+    if (participant.id === "p5" && !participant.programHistory.some((program) => program.batchName === "Foundation Yoga - March Program")) {
       participant.programHistory.unshift({
         programName: "Foundation Yoga",
-        batchName: "Foundation Yoga - March Batch",
+        batchName: "Foundation Yoga - March Program",
         start: "2026-03-04",
         end: "2026-03-10",
         completion: "Completed",
@@ -975,7 +978,7 @@ function renderCourses() {
 function renderBatchDetail() {
   const course = state.courses.find((item) => item.id === selectedCourseId);
   if (!course) {
-    $("#batchDetail").innerHTML = `<p class="muted">No batches scheduled yet.</p>`;
+    $("#batchDetail").innerHTML = `<p class="muted">No programs scheduled yet.</p>`;
     return;
   }
   const registered = allRegistrationRows().filter(({ registration }) => registration.courseId === course.id).length;
@@ -1011,7 +1014,7 @@ function renderBatchDetail() {
     <section class="batch-attendance-panel">
       <div class="subform-header">
         <h3>Session Plan</h3>
-        <span class="muted">Planned in Course Master and applied to this batch</span>
+        <span class="muted">Planned in Course Master and applied to this program</span>
       </div>
       <div class="table-wrap subform-table session-plan-table">
         <table>
@@ -1066,7 +1069,7 @@ function renderBatchDetail() {
                 }).join("")}
                 <td><span class="pill ${statusClass(registration.completion)}">${registration.completion}</span><br><span class="muted">${registration.attendance}/${sessions.length} attended</span></td>
               </tr>
-            `).join("") : `<tr><td colspan="${sessions.length + 2}"><span class="muted">No confirmed participants for this batch yet.</span></td></tr>`}
+            `).join("") : `<tr><td colspan="${sessions.length + 2}"><span class="muted">No confirmed participants for this program yet.</span></td></tr>`}
           </tbody>
         </table>
       </div>
@@ -1137,7 +1140,7 @@ function renderTeachers() {
         <td><strong>${teacher.name}</strong><br><span class="muted">${teacher.email}</span></td>
         <td>${teacher.speciality}</td>
         <td>${teacher.phone}<br><span class="muted">${teacher.email}</span></td>
-        <td>${programs.length ? programs.map((course) => `<span class="pill">${course.name}</span>`).join(" ") : "<span class=\"muted\">No batches assigned</span>"}</td>
+        <td>${programs.length ? programs.map((course) => `<span class="pill">${course.name}</span>`).join(" ") : "<span class=\"muted\">No programs assigned</span>"}</td>
         <td>
           ${canManageMasters() ? `<div class="row-actions">
             <button class="secondary-button" type="button" data-teacher-edit="${teacher.id}">Edit</button>
@@ -1184,7 +1187,7 @@ function renderTeachers() {
         <table>
           <thead>
             <tr>
-              <th>Batch</th>
+              <th>Program</th>
               <th>Dates</th>
               <th>Hall</th>
               <th>Participants</th>
@@ -1264,8 +1267,8 @@ function renderParticipantsMaster() {
       <div class="detail-item"><span>Emergency Contact</span><strong>${selected.emergencyContact || "Not recorded"}</strong></div>
       <div class="detail-item"><span>Address</span><strong>${selected.address || "Not recorded"}</strong></div>
       <div class="detail-item"><span>Course Master</span><strong>${courseMaster?.name || "Not mapped"}</strong></div>
-      <div class="detail-item"><span>Batch</span><strong>${batch?.name || "Unassigned"}</strong></div>
-      <div class="detail-item"><span>Batch Dates</span><strong>${batch ? `${batch.start} to ${batch.end}` : "Not scheduled"}</strong></div>
+      <div class="detail-item"><span>Program</span><strong>${batch?.name || "Unassigned"}</strong></div>
+      <div class="detail-item"><span>Program Dates</span><strong>${batch ? `${batch.start} to ${batch.end}` : "Not scheduled"}</strong></div>
       <div class="detail-item"><span>Eligibility</span><strong>${registration.eligible ? "Verified" : "Needs review"}</strong></div>
       <div class="detail-item"><span>Course Completion</span><strong>${registration.completion}</strong></div>
       <div class="detail-item"><span>Attendance</span><strong>${registration.attendance} sessions</strong></div>
@@ -1285,7 +1288,7 @@ function renderParticipantsMaster() {
           <thead>
             <tr>
               <th>Program</th>
-              <th>Batch</th>
+              <th>Program</th>
               <th>Dates</th>
               <th>Status</th>
               <th>Attendance</th>
@@ -1396,7 +1399,7 @@ function renderRooms() {
 }
 
 function renderHalls() {
-  $("#hallRows").innerHTML = state.halls.map((hall) => `
+  const hallRows = state.halls.map((hall) => `
     <tr>
       <td><strong>${hall.name}</strong></td>
       <td>${hall.capacity}</td>
@@ -1405,10 +1408,7 @@ function renderHalls() {
       <td><div class="row-actions"><button class="secondary-button" type="button" data-hall-edit="${hall.id}">Edit</button><button class="danger-button" type="button" data-hall-delete="${hall.id}">Delete</button></div></td>
     </tr>
   `).join("");
-}
-
-function renderHallBookings() {
-  $("#hallBookingRows").innerHTML = state.hallBookings.map((booking) => `
+  const bookingRows = state.hallBookings.map((booking) => `
     <tr>
       <td><button class="text-link-button" type="button" data-linked-batch="${booking.courseId}">${courseName(booking.courseId)}</button></td>
       <td>${hallName(booking.hallId)}</td>
@@ -1417,6 +1417,42 @@ function renderHallBookings() {
       <td><div class="row-actions"><button class="secondary-button" type="button" data-hall-booking-edit="${booking.id}">Edit</button><button class="danger-button" type="button" data-hall-booking-delete="${booking.id}">Delete</button></div></td>
     </tr>
   `).join("");
+  $("#hallContent").innerHTML = hallTab === "halls" ? `
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Hall</th>
+            <th>Capacity</th>
+            <th>Location</th>
+            <th>Notes</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>${hallRows}</tbody>
+      </table>
+    </div>
+  ` : `
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Program</th>
+            <th>Hall</th>
+            <th>Dates</th>
+            <th>Notes</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>${bookingRows}</tbody>
+      </table>
+    </div>
+  `;
+  $$("#hallTabs button").forEach((button) => button.classList.toggle("is-selected", button.dataset.hallTab === hallTab));
+}
+
+function renderHallBookings() {
+  renderHalls();
 }
 
 function renderCertificates() {
@@ -1437,6 +1473,7 @@ function renderCertificates() {
 }
 
 function renderHistory() {
+  if (!$("#historyList")) return;
   $("#historyList").innerHTML = state.participants.map((p) => {
     const registration = currentRegistration(p);
     return `
@@ -1448,7 +1485,7 @@ function renderHistory() {
         </div>
         <span class="pill ${statusClass(registration?.completion || "Pending")}">${registration?.completion || "Pending"}</span>
       </div>
-      <p><strong>Batch:</strong> ${courseName(registration?.courseId)}</p>
+      <p><strong>Program:</strong> ${courseName(registration?.courseId)}</p>
       <p><strong>Accommodation:</strong> ${roomName(registration?.roomId)}</p>
       <p><strong>Attendance:</strong> ${registration?.attendance || 0} sessions | <strong>Certificate:</strong> ${registration?.certificate ? "Issued" : "Pending"}</p>
       <p class="muted">${p.notes || "No special notes recorded."}</p>
@@ -1489,9 +1526,7 @@ function renderAll() {
   renderRegistrations();
   renderRooms();
   renderHalls();
-  renderHallBookings();
   renderCertificates();
-  renderHistory();
   renderCourseOptions();
   renderProgramParentOptions();
 }
@@ -1641,7 +1676,7 @@ function deleteTeacher(teacherId) {
   if (!teacher) return;
   const assigned = state.courses.filter((course) => course.teacher === teacher.name).length;
   if (assigned > 0) {
-    showToast("Cannot delete a teacher assigned to scheduled batches.");
+    showToast("Cannot delete a teacher assigned to scheduled programs.");
     return;
   }
   state.teachers = state.teachers.filter((item) => item.id !== teacherId);
@@ -1690,8 +1725,8 @@ function addOrEditHall(hallId = "") {
 function addOrEditHallBooking(bookingId = "") {
   const booking = state.hallBookings.find((item) => item.id === bookingId);
   const course = state.courses.find((item) => item.id === (booking?.courseId || selectedCourseId));
-  openRecordDialog("hallBooking", bookingId, "Program Hall Bookings", booking ? "Edit Hall Booking" : "Add Hall Booking", [
-    ["courseId", "Batch ID", booking?.courseId || selectedCourseId || state.courses[0]?.id || "", "text", state.courses.map((item) => `${item.id}: ${item.name}`).join(" | ")],
+  openRecordDialog("hallBooking", bookingId, "Program Halls", booking ? "Edit Booking" : "Add Booking", [
+    ["courseId", "Program ID", booking?.courseId || selectedCourseId || state.courses[0]?.id || "", "text", state.courses.map((item) => `${item.id}: ${item.name}`).join(" | ")],
     ["hallId", "Hall ID", booking?.hallId || state.halls[0]?.id || "", "text", state.halls.map((hall) => `${hall.id}: ${hall.name}`).join(" | ")],
     ["start", "Start Date", booking?.start || course?.start || "", "date"],
     ["end", "End Date", booking?.end || course?.end || "", "date"],
@@ -1722,7 +1757,7 @@ function applyCourseSessionPlan(courseId, shouldRender = true) {
   const course = state.courses.find((item) => item.id === courseId);
   if (!course) return;
   if (!course.programId) {
-    showToast("Select a Course Master for this batch first.");
+    showToast("Select a Course Master for this program first.");
     return;
   }
   course.sessions = defaultSessionPlan(courseId);
@@ -1738,7 +1773,7 @@ function applyCourseSessionPlan(courseId, shouldRender = true) {
     });
   if (shouldRender) {
     renderAll();
-    showToast("Course session plan applied to batch.");
+    showToast("Course session plan applied to program.");
   }
 }
 
@@ -1748,7 +1783,7 @@ function deleteProgramSession(programId, sessionId) {
   program.sessionTemplates = (program.sessionTemplates || []).filter((session) => session.id !== sessionId);
   applyProgramPlanToBatches(programId);
   renderAll();
-  showToast("Course session deleted and applied to batches.");
+  showToast("Course session deleted and applied to programs.");
 }
 
 function openRecordDialog(mode, id, eyebrow, title, fields) {
@@ -1905,7 +1940,7 @@ function deleteProgram(programId) {
   }
   const hasBatch = state.courses.some((batch) => batch.name.toLowerCase().includes(program.name.toLowerCase()));
   if (hasBatch) {
-    showToast("Cannot delete a course used by existing batches.");
+    showToast("Cannot delete a course used by existing programs.");
     return;
   }
   state.programs = state.programs.filter((item) => item.id !== programId);
@@ -1962,6 +1997,12 @@ function bindEvents() {
     if (!button) return;
     accommodationTab = button.dataset.accommodationTab;
     renderRooms();
+  });
+  $("#hallTabs").addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-hall-tab]");
+    if (!button) return;
+    hallTab = button.dataset.hallTab;
+    renderHalls();
   });
   $("#loginForm").addEventListener("submit", (event) => {
     event.preventDefault();
@@ -2040,7 +2081,7 @@ function bindEvents() {
         showToast("Login as a Teacher or Admin to open teacher records.");
         return;
       }
-      openLinkedRecord("teachers", { teacherId: linkedTeacher.dataset.linkedTeacher }, "Back to Batch");
+      openLinkedRecord("teachers", { teacherId: linkedTeacher.dataset.linkedTeacher }, "Back to Program");
       return;
     }
     const linkedBatch = event.target.closest("[data-linked-batch]");
@@ -2054,7 +2095,7 @@ function bindEvents() {
         showToast("Participants can view only their own record.");
         return;
       }
-      openLinkedRecord("participants", { participantId: linkedParticipant.dataset.linkedParticipant }, "Back to Batch");
+      openLinkedRecord("participants", { participantId: linkedParticipant.dataset.linkedParticipant }, "Back to Program");
       return;
     }
     const batchView = event.target.closest("[data-batch-view]");
@@ -2333,14 +2374,14 @@ function bindEvents() {
       hallId,
       start,
       end,
-      notes: "Created from batch schedule"
+      notes: "Created from program schedule"
     });
     calendarDate = new Date(`${start}T00:00:00`);
     event.currentTarget.reset();
     $("#courseDialog").close();
     activateView("courses");
     renderAll();
-    showToast("Batch schedule added.");
+    showToast("Program schedule added.");
   });
   $("#programForm").addEventListener("submit", (event) => {
     if (event.submitter?.value === "cancel") return;
