@@ -13,6 +13,8 @@ const emptyState = () => ({
 const state = loadData();
 let currentSession = loadSession();
 const supabaseClient = createSupabaseClient();
+let accessRoles = [];
+let accessUsers = [];
 let hasLoadedRemoteData = false;
 let isHydratingRemoteData = false;
 let remoteSaveTimer = null;
@@ -40,6 +42,7 @@ const views = [
   ["registrations", "Registrations"],
   ["accommodation", "Accommodation"],
   ["halls", "Program Halls"],
+  ["access", "Users & Roles"],
   ["certificates", "Certificates"]
 ];
 
@@ -65,6 +68,18 @@ function createSupabaseClient() {
   const hasConfig = config.url && config.anonKey;
   if (!hasConfig || !window.supabase?.createClient) return null;
   return window.supabase.createClient(config.url, config.anonKey);
+}
+
+function createSupabaseSignupClient() {
+  const config = window.ALIYAR_SUPABASE || {};
+  if (!config.url || !config.anonKey || !window.supabase?.createClient) return null;
+  return window.supabase.createClient(config.url, config.anonKey, {
+    auth: {
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+      persistSession: false
+    }
+  });
 }
 
 async function loadRemoteData() {
@@ -100,6 +115,7 @@ async function loadRemoteData() {
       remoteStatus = hasAnyRecords(state) ? "Supabase connected" : "Supabase connected - no records yet";
     }
     hasLoadedRemoteData = true;
+    await loadAccessManagementData();
     calendarDate = getInitialCalendarDate();
     isHydratingRemoteData = true;
     renderAll();
@@ -114,6 +130,23 @@ async function loadRemoteData() {
     renderAuthState();
     showToast(error.message || "Unable to load Supabase data.");
   }
+}
+
+async function loadAccessManagementData() {
+  if (!supabaseClient) return;
+  if (!currentSession.permissions?.canManageMasters) {
+    accessRoles = [];
+    accessUsers = [];
+    return;
+  }
+  const [rolesResult, usersResult] = await Promise.all([
+    supabaseClient.from("roles").select("*").order("name", { ascending: true }),
+    supabaseClient.from("user_roles").select("*").order("display_name", { ascending: true })
+  ]);
+  if (rolesResult.error) throw rolesResult.error;
+  if (usersResult.error) throw usersResult.error;
+  accessRoles = rolesResult.data || [];
+  accessUsers = usersResult.data || [];
 }
 
 async function refreshAuthSession() {
@@ -842,6 +875,19 @@ function visibleRegistrationRows() {
   return allRegistrationRows();
 }
 
+function roleById(roleId) {
+  return accessRoles.find((role) => role.id === roleId) || null;
+}
+
+function permissionsForRole(role) {
+  if (!role) return [];
+  return [
+    role.can_manage_masters ? "Masters" : "",
+    role.can_review_registrations ? "Registrations" : "",
+    role.can_mark_attendance ? "Attendance" : ""
+  ].filter(Boolean);
+}
+
 async function login(identifier, password) {
   if (!supabaseClient) {
     showToast("Supabase is not configured. Login requires Supabase Auth.");
@@ -864,6 +910,7 @@ async function login(identifier, password) {
     await supabaseClient.auth.signOut();
     return;
   }
+  await loadAccessManagementData();
   selectedParticipantId = currentSession.role === "participant" ? currentSession.id : selectedParticipantId;
   selectedTeacherId = currentSession.role === "teacher" ? currentSession.id : selectedTeacherId;
   linkBackStack = [];
@@ -1108,6 +1155,8 @@ function renderPermissionChrome() {
     "#autoAssign",
     "#addHall",
     "#addHallBooking",
+    "#addAccessUser",
+    "#addAccessRole",
     "#generateCertificates"
   ];
   adminControls.forEach((selector) => {
@@ -1687,6 +1736,63 @@ function renderHallBookings() {
   renderHalls();
 }
 
+function renderAccessManagement() {
+  if (!$("#accessUserRows")) return;
+  $("#accessUserRows").innerHTML = accessUsers.map((user) => {
+    const role = roleById(user.role_id);
+    const linkedTeacher = state.teachers.find((teacher) => teacher.id === user.linked_teacher_id);
+    const linkedParticipant = state.participants.find((participant) => participant.id === user.linked_participant_id);
+    const linkedRecord = linkedTeacher
+      ? `<button class="text-link-button" type="button" data-linked-teacher="${linkedTeacher.id}">${linkedTeacher.name}</button>`
+      : linkedParticipant
+        ? `<button class="text-link-button" type="button" data-linked-participant="${linkedParticipant.id}">${linkedParticipant.name}</button>`
+        : "<span class=\"muted\">Not linked</span>";
+    return `
+      <tr>
+        <td><strong>${user.display_name}</strong><br><span class="muted">${user.login_email || user.user_id}</span></td>
+        <td>${role?.name || user.role_id}<br><span class="muted">${user.role_id}</span></td>
+        <td>${linkedRecord}</td>
+        <td><span class="pill ${user.active ? "completed" : "dropout"}">${user.active ? "Active" : "Inactive"}</span></td>
+        <td>
+          <div class="row-actions">
+            <button class="secondary-button" type="button" data-access-user-edit="${user.user_id}">Edit</button>
+            <button class="danger-button" type="button" data-access-user-toggle="${user.user_id}">${user.active ? "Deactivate" : "Activate"}</button>
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join("") || `<tr><td colspan="5"><span class="muted">No app users configured yet.</span></td></tr>`;
+
+  $("#accessRoleRows").innerHTML = accessRoles.map((role) => {
+    const permissions = permissionsForRole(role);
+    const assigned = accessUsers.filter((user) => user.role_id === role.id).length;
+    return `
+      <tr>
+        <td><strong>${role.name}</strong><br><span class="muted">${role.id}${assigned ? ` | ${assigned} user(s)` : ""}</span></td>
+        <td>
+          <div class="permission-list">
+            ${permissions.length ? permissions.map((permission) => `<span class="pill">${permission}</span>`).join("") : "<span class=\"muted\">View only</span>"}
+          </div>
+        </td>
+        <td><span class="pill ${role.active ? "completed" : "dropout"}">${role.active ? "Active" : "Inactive"}</span></td>
+        <td>
+          <div class="row-actions">
+            <button class="secondary-button" type="button" data-access-role-edit="${role.id}">Edit</button>
+            <button class="danger-button" type="button" data-access-role-toggle="${role.id}">${role.active ? "Deactivate" : "Activate"}</button>
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join("") || `<tr><td colspan="4"><span class="muted">No roles configured yet.</span></td></tr>`;
+
+  $("#accessUserRoleSelect").innerHTML = accessRoles
+    .filter((role) => role.active)
+    .map((role) => `<option value="${role.id}">${role.name}</option>`)
+    .join("");
+  $("#accessUserTeacherSelect").innerHTML = `<option value="">No teacher link</option>${state.teachers.map((teacher) => `<option value="${teacher.id}">${teacher.name}</option>`).join("")}`;
+  $("#accessUserParticipantSelect").innerHTML = `<option value="">No participant link</option>${state.participants.map((participant) => `<option value="${participant.id}">${participant.name}</option>`).join("")}`;
+}
+
 function renderCertificates() {
   $("#certificateList").innerHTML = state.participants.map((p) => {
     const registration = currentRegistration(p);
@@ -1760,6 +1866,7 @@ function renderAll() {
   renderRegistrations();
   renderRooms();
   renderHalls();
+  renderAccessManagement();
   renderCertificates();
   renderCourseOptions();
   renderProgramParentOptions();
@@ -1979,6 +2086,166 @@ function addOrEditProgramSession(programId, sessionId = "") {
     ["title", "Session Name", session?.title || "", "text"],
     ["topic", "Topic / Notes", session?.topic || "", "textarea"]
   ]);
+}
+
+function openAccessUserDialog(userId = "") {
+  if (!canManageMasters()) return;
+  const form = $("#accessUserForm");
+  const user = accessUsers.find((item) => item.user_id === userId);
+  form.reset();
+  form.elements.userId.value = userId;
+  renderAccessManagement();
+  $("#accessUserDialogTitle").textContent = user ? "Edit User Access" : "Add User";
+  form.elements.email.readOnly = Boolean(user);
+  form.querySelector(".password-field").hidden = Boolean(user);
+  form.elements.password.required = !user;
+  if (user) {
+    form.elements.displayName.value = user.display_name || "";
+    form.elements.email.value = user.login_email || "";
+    form.elements.roleId.value = user.role_id || accessRoles[0]?.id || "";
+    form.elements.linkedTeacherId.value = user.linked_teacher_id || "";
+    form.elements.linkedParticipantId.value = user.linked_participant_id || "";
+    form.elements.active.checked = Boolean(user.active);
+  } else {
+    form.elements.roleId.value = accessRoles.find((role) => role.id === "participant")?.id || accessRoles[0]?.id || "";
+    form.elements.active.checked = true;
+  }
+  $("#accessUserDialog").showModal();
+}
+
+function openAccessRoleDialog(roleId = "") {
+  if (!canManageMasters()) return;
+  const form = $("#accessRoleForm");
+  const role = accessRoles.find((item) => item.id === roleId);
+  form.reset();
+  form.elements.existingId.value = roleId;
+  $("#accessRoleDialogTitle").textContent = role ? "Edit Role" : "Add Role";
+  form.elements.id.readOnly = Boolean(role);
+  if (role) {
+    form.elements.id.value = role.id;
+    form.elements.name.value = role.name;
+    form.elements.description.value = role.description || "";
+    form.elements.canManageMasters.checked = Boolean(role.can_manage_masters);
+    form.elements.canReviewRegistrations.checked = Boolean(role.can_review_registrations);
+    form.elements.canMarkAttendance.checked = Boolean(role.can_mark_attendance);
+    form.elements.active.checked = Boolean(role.active);
+  } else {
+    form.elements.active.checked = true;
+  }
+  $("#accessRoleDialog").showModal();
+}
+
+async function saveAccessRole(form) {
+  if (!supabaseClient || !canManageMasters()) return;
+  const data = new FormData(form);
+  const existingId = data.get("existingId");
+  const roleId = (data.get("id") || existingId || "").trim().toLowerCase();
+  const payload = {
+    id: roleId,
+    name: data.get("name").trim(),
+    description: data.get("description").trim(),
+    can_manage_masters: data.has("canManageMasters"),
+    can_review_registrations: data.has("canReviewRegistrations"),
+    can_mark_attendance: data.has("canMarkAttendance"),
+    active: data.has("active"),
+    updated_at: new Date().toISOString()
+  };
+  const result = existingId
+    ? await supabaseClient.from("roles").update(payload).eq("id", existingId)
+    : await supabaseClient.from("roles").insert(payload);
+  if (result.error) {
+    showToast(result.error.message || "Unable to save role.");
+    return;
+  }
+  $("#accessRoleDialog").close();
+  await loadAccessManagementData();
+  renderAll();
+  showToast(existingId ? "Role updated." : "Role added.");
+}
+
+async function saveAccessUser(form) {
+  if (!supabaseClient || !canManageMasters()) return;
+  const data = new FormData(form);
+  const existingUserId = data.get("userId");
+  let userId = existingUserId;
+  if (!existingUserId) {
+    const signupClient = createSupabaseSignupClient();
+    if (!signupClient) {
+      showToast("Supabase Auth is not configured.");
+      return;
+    }
+    const signup = await signupClient.auth.signUp({
+      email: data.get("email").trim(),
+      password: data.get("password"),
+      options: {
+        data: { name: data.get("displayName").trim() }
+      }
+    });
+    if (signup.error || !signup.data.user) {
+      showToast(signup.error?.message || "Unable to create login user.");
+      return;
+    }
+    userId = signup.data.user.id;
+  }
+  const payload = {
+    user_id: userId,
+    role_id: data.get("roleId"),
+    display_name: data.get("displayName").trim(),
+    login_email: data.get("email").trim(),
+    linked_teacher_id: data.get("linkedTeacherId") || null,
+    linked_participant_id: data.get("linkedParticipantId") || null,
+    active: data.has("active"),
+    updated_at: new Date().toISOString()
+  };
+  const result = existingUserId
+    ? await supabaseClient.from("user_roles").update(payload).eq("user_id", existingUserId)
+    : await supabaseClient.from("user_roles").insert(payload);
+  if (result.error) {
+    showToast(result.error.message || "Unable to save user access.");
+    return;
+  }
+  $("#accessUserDialog").close();
+  await loadAccessManagementData();
+  renderAll();
+  showToast(existingUserId ? "User access updated." : "User created and role assigned.");
+}
+
+async function toggleAccessUser(userId) {
+  if (!canManageMasters()) return;
+  const user = accessUsers.find((item) => item.user_id === userId);
+  if (!user) return;
+  const result = await supabaseClient
+    .from("user_roles")
+    .update({ active: !user.active, updated_at: new Date().toISOString() })
+    .eq("user_id", userId);
+  if (result.error) {
+    showToast(result.error.message || "Unable to update user access.");
+    return;
+  }
+  await loadAccessManagementData();
+  renderAll();
+  showToast(user.active ? "User access deactivated." : "User access activated.");
+}
+
+async function toggleAccessRole(roleId) {
+  if (!canManageMasters()) return;
+  const role = accessRoles.find((item) => item.id === roleId);
+  if (!role) return;
+  if (role.active && accessUsers.some((user) => user.role_id === roleId && user.active)) {
+    showToast("Cannot deactivate a role assigned to active users.");
+    return;
+  }
+  const result = await supabaseClient
+    .from("roles")
+    .update({ active: !role.active, updated_at: new Date().toISOString() })
+    .eq("id", roleId);
+  if (result.error) {
+    showToast(result.error.message || "Unable to update role.");
+    return;
+  }
+  await loadAccessManagementData();
+  renderAll();
+  showToast(role.active ? "Role deactivated." : "Role activated.");
 }
 
 function applyProgramPlanToBatches(programId) {
@@ -2209,6 +2476,8 @@ function bindEvents() {
   });
   $("#addHall").addEventListener("click", () => canManageMasters() && addOrEditHall());
   $("#addHallBooking").addEventListener("click", () => canManageMasters() && addOrEditHallBooking());
+  $("#addAccessUser").addEventListener("click", () => openAccessUserDialog());
+  $("#addAccessRole").addEventListener("click", () => openAccessRoleDialog());
   $("#generateCertificates").addEventListener("click", () => canManageMasters() && generateCertificates());
   $("#globalSearch")?.addEventListener("input", renderRegistrations);
   $("#portalFilterToggle").addEventListener("click", () => {
@@ -2321,6 +2590,18 @@ function bindEvents() {
     if (cancelRecord) {
       event.preventDefault();
       $("#recordDialog").close();
+      return;
+    }
+    const cancelAccessUser = event.target.closest("#closeAccessUser, #cancelAccessUser");
+    if (cancelAccessUser) {
+      event.preventDefault();
+      $("#accessUserDialog").close();
+      return;
+    }
+    const cancelAccessRole = event.target.closest("#closeAccessRole, #cancelAccessRole");
+    if (cancelAccessRole) {
+      event.preventDefault();
+      $("#accessRoleDialog").close();
       return;
     }
     const cancelAttendanceReason = event.target.closest("#closeAttendanceReason, #cancelAttendanceReason");
@@ -2481,6 +2762,26 @@ function bindEvents() {
     if (applyCourseSessionsButton) {
       if (!canManageMasters()) return;
       applyCourseSessionPlan(applyCourseSessionsButton.dataset.applyCourseSessions);
+      return;
+    }
+    const editAccessUser = event.target.closest("[data-access-user-edit]");
+    if (editAccessUser) {
+      openAccessUserDialog(editAccessUser.dataset.accessUserEdit);
+      return;
+    }
+    const toggleAccessUserButton = event.target.closest("[data-access-user-toggle]");
+    if (toggleAccessUserButton) {
+      await toggleAccessUser(toggleAccessUserButton.dataset.accessUserToggle);
+      return;
+    }
+    const editAccessRole = event.target.closest("[data-access-role-edit]");
+    if (editAccessRole) {
+      openAccessRoleDialog(editAccessRole.dataset.accessRoleEdit);
+      return;
+    }
+    const toggleAccessRoleButton = event.target.closest("[data-access-role-toggle]");
+    if (toggleAccessRoleButton) {
+      await toggleAccessRole(toggleAccessRoleButton.dataset.accessRoleToggle);
       return;
     }
     const teacherView = event.target.closest("[data-teacher-view]");
@@ -2717,6 +3018,16 @@ function bindEvents() {
     if (event.submitter?.value === "cancel") return;
     event.preventDefault();
     saveRecordForm(event.currentTarget);
+  });
+  $("#accessUserForm").addEventListener("submit", async (event) => {
+    if (event.submitter?.value === "cancel") return;
+    event.preventDefault();
+    await saveAccessUser(event.currentTarget);
+  });
+  $("#accessRoleForm").addEventListener("submit", async (event) => {
+    if (event.submitter?.value === "cancel") return;
+    event.preventDefault();
+    await saveAccessRole(event.currentTarget);
   });
   $("#attendanceReasonForm").addEventListener("submit", (event) => {
     if (event.submitter?.value === "cancel") return;

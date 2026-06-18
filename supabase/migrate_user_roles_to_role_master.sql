@@ -35,6 +35,15 @@ on conflict (id) do update set
 alter table public.user_roles
   add column if not exists role_id text;
 
+alter table public.user_roles
+  add column if not exists login_email text;
+
+update public.user_roles
+set login_email = auth.users.email
+from auth.users
+where public.user_roles.user_id = auth.users.id
+  and public.user_roles.login_email is null;
+
 do $$
 begin
   if exists (
@@ -84,12 +93,26 @@ alter table public.roles enable row level security;
 alter table public.user_roles enable row level security;
 
 drop policy if exists "roles_read_active" on public.roles;
+drop policy if exists "temporary_demo_read_roles" on public.roles;
+drop policy if exists "temporary_demo_write_roles" on public.roles;
 drop policy if exists "user_roles_read_own" on public.user_roles;
+drop policy if exists "temporary_demo_read_user_roles" on public.user_roles;
+drop policy if exists "temporary_demo_write_user_roles" on public.user_roles;
 
-create policy "roles_read_active"
+create policy "temporary_demo_read_roles"
   on public.roles for select
-  using (active = true);
+  using (true);
 
-create policy "user_roles_read_own"
+create policy "temporary_demo_write_roles"
+  on public.roles for all
+  using (true)
+  with check (true);
+
+create policy "temporary_demo_read_user_roles"
   on public.user_roles for select
-  using (auth.uid() = user_id);
+  using (true);
+
+create policy "temporary_demo_write_user_roles"
+  on public.user_roles for all
+  using (true)
+  with check (true);

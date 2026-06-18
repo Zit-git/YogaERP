@@ -172,12 +172,16 @@ create table if not exists public.user_roles (
   user_id uuid primary key references auth.users(id) on delete cascade,
   role_id text not null references public.roles(id) on delete restrict,
   display_name text not null,
+  login_email text,
   linked_teacher_id text references public.teachers(id) on delete set null,
   linked_participant_id text references public.participants(id) on delete set null,
   active boolean not null default true,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.user_roles
+  add column if not exists login_email text;
 
 alter table public.app_state enable row level security;
 alter table public.course_masters enable row level security;

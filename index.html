@@ -317,6 +317,64 @@
         <div id="hallContent"></div>
       </section>
 
+      <section id="access" class="view" data-title="Users & Roles">
+        <div class="section-toolbar">
+          <div>
+            <h2>Users & Roles</h2>
+            <p>Create app users, assign roles, and maintain permissions.</p>
+          </div>
+          <div class="row-actions">
+            <button class="primary-button" id="addAccessUser" type="button">Add User</button>
+            <button class="secondary-button" id="addAccessRole" type="button">Add Role</button>
+          </div>
+        </div>
+        <div class="access-layout">
+          <section class="panel">
+            <div class="panel-header">
+              <div>
+                <h2>Users</h2>
+                <span class="muted">Supabase Auth users linked to app roles</span>
+              </div>
+            </div>
+            <div class="table-wrap flat-table">
+              <table>
+                <thead>
+                  <tr>
+                    <th>User</th>
+                    <th>Role</th>
+                    <th>Linked Record</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="accessUserRows"></tbody>
+              </table>
+            </div>
+          </section>
+          <section class="panel">
+            <div class="panel-header">
+              <div>
+                <h2>Roles</h2>
+                <span class="muted">Permission presets used at login</span>
+              </div>
+            </div>
+            <div class="table-wrap flat-table">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Role</th>
+                    <th>Permissions</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="accessRoleRows"></tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      </section>
+
       <section id="certificates" class="view" data-title="Completion & Certificates">
         <div class="section-toolbar">
           <div>
@@ -477,6 +535,58 @@
       </form>
     </dialog>
 
+    <dialog id="accessUserDialog">
+      <form method="dialog" id="accessUserForm">
+        <div class="modal-header">
+          <div>
+            <p class="eyebrow">Access Control</p>
+            <h2 id="accessUserDialogTitle">Add User</h2>
+          </div>
+          <button class="icon-button" id="closeAccessUser" value="cancel" aria-label="Close" type="button">x</button>
+        </div>
+        <input type="hidden" name="userId">
+        <div class="form-grid">
+          <label>Name<input name="displayName" required></label>
+          <label>Email<input name="email" type="email" required></label>
+          <label class="password-field">Temporary Password<input name="password" type="password" minlength="6"></label>
+          <label>Role<select name="roleId" id="accessUserRoleSelect" required></select></label>
+          <label>Linked Teacher<select name="linkedTeacherId" id="accessUserTeacherSelect"></select></label>
+          <label>Linked Participant<select name="linkedParticipantId" id="accessUserParticipantSelect"></select></label>
+          <label class="checkbox-label"><input name="active" type="checkbox" checked> Active login access</label>
+        </div>
+        <menu>
+          <button class="secondary-button" id="cancelAccessUser" value="cancel" type="button">Cancel</button>
+          <button class="primary-button" value="default" type="submit">Save User</button>
+        </menu>
+      </form>
+    </dialog>
+
+    <dialog id="accessRoleDialog">
+      <form method="dialog" id="accessRoleForm">
+        <div class="modal-header">
+          <div>
+            <p class="eyebrow">Access Control</p>
+            <h2 id="accessRoleDialogTitle">Add Role</h2>
+          </div>
+          <button class="icon-button" id="closeAccessRole" value="cancel" aria-label="Close" type="button">x</button>
+        </div>
+        <input type="hidden" name="existingId">
+        <div class="form-grid">
+          <label>Role ID<input name="id" pattern="[a-z0-9_-]+" placeholder="coordinator" required></label>
+          <label>Role Name<input name="name" placeholder="Coordinator" required></label>
+          <label class="wide">Description<textarea name="description" rows="3"></textarea></label>
+          <label class="checkbox-label"><input name="canManageMasters" type="checkbox"> Manage masters</label>
+          <label class="checkbox-label"><input name="canReviewRegistrations" type="checkbox"> Review registrations</label>
+          <label class="checkbox-label"><input name="canMarkAttendance" type="checkbox"> Mark attendance</label>
+          <label class="checkbox-label"><input name="active" type="checkbox" checked> Active role</label>
+        </div>
+        <menu>
+          <button class="secondary-button" id="cancelAccessRole" value="cancel" type="button">Cancel</button>
+          <button class="primary-button" value="default" type="submit">Save Role</button>
+        </menu>
+      </form>
+    </dialog>
+
     <dialog id="attendanceReasonDialog">
       <form method="dialog" id="attendanceReasonForm">
         <div class="modal-header">
@@ -503,6 +613,6 @@
     <div id="toast" role="status" aria-live="polite"></div>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="supabase-config.js?v=35"></script>
-    <script src="app.js?v=52"></script>
+    <script src="app.js?v=53"></script>
   </body>
 </html>

@@ -36,12 +36,16 @@ create table if not exists public.user_roles (
   user_id uuid primary key references auth.users(id) on delete cascade,
   role_id text not null references public.roles(id) on delete restrict,
   display_name text not null,
+  login_email text,
   linked_teacher_id text references public.teachers(id) on delete set null,
   linked_participant_id text references public.participants(id) on delete set null,
   active boolean not null default true,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.user_roles
+  add column if not exists login_email text;
 
 alter table public.roles enable row level security;
 alter table public.user_roles enable row level security;
@@ -62,17 +66,20 @@ insert into public.user_roles (
   user_id,
   role_id,
   display_name,
+  login_email,
   active
 )
 select
   id,
   'admin',
   coalesce(raw_user_meta_data->>'name', email, 'System Administrator'),
+  email,
   true
 from auth.users
 where email = 'REPLACE_WITH_ADMIN_EMAIL'
 on conflict (user_id) do update set
   role_id = excluded.role_id,
   display_name = excluded.display_name,
+  login_email = excluded.login_email,
   active = excluded.active,
   updated_at = now();
