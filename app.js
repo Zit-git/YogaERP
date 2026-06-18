@@ -1083,7 +1083,7 @@ function renderPortal() {
     return `<tr>
       <td><strong>${course.name}</strong><br><span class="muted">${course.eligibility}</span><br><span class="pill ${statusClass(course.status || programLifecycleStatus(course))}">${course.status || programLifecycleStatus(course)}</span></td>
       <td>${course.start}<br><span class="muted">${course.end}</span></td>
-      <td><button class="secondary-button" type="button" data-public-register="${course.id}">Register as Guest</button></td>
+      <td><button class="secondary-button" type="button" data-public-register="${course.id}">Register</button></td>
     </tr>`;
   }).join("");
   $("#portalBatchRows").innerHTML = rows || `<tr><td colspan="3"><span class="muted">No upcoming programs are open for registration.</span></td></tr>`;
@@ -1112,13 +1112,11 @@ function renderPermissionChrome() {
     const element = $(selector);
     if (element) element.hidden = !canManageMasters();
   });
-  const registrationButtons = ["#openRegistration", "#addParticipantFromMaster"];
+  const registrationButtons = ["#addParticipantFromMaster"];
   registrationButtons.forEach((selector) => {
     const element = $(selector);
     if (element) element.hidden = currentSession.role === "participant";
   });
-  const topActions = $(".top-actions");
-  if (topActions) topActions.hidden = currentSession.role === "public";
 }
 
 function renderMetrics() {
@@ -1548,7 +1546,7 @@ function renderParticipantsMaster() {
 }
 
 function renderRegistrations() {
-  const search = $("#globalSearch").value.trim().toLowerCase();
+  const search = ($("#globalSearch")?.value || "").trim().toLowerCase();
   let rows = visibleRegistrationRows().filter(({ registration }) => currentFilter === "all" || registration.status === currentFilter);
   if (search) {
     rows = rows.filter(({ participant, registration }) => [participant.name, participant.email, participant.phone, participant.id, courseName(registration.courseId), roomName(registration.roomId)].join(" ").toLowerCase().includes(search));
@@ -2183,7 +2181,6 @@ function deleteProgram(programId) {
 }
 
 function bindEvents() {
-  $("#openRegistration").addEventListener("click", () => $("#registrationDialog").showModal());
   $("#addCourse").addEventListener("click", () => canManageMasters() && $("#courseDialog").showModal());
   $("#addProgram").addEventListener("click", () => canManageMasters() && openProgramDialog());
   $("#addTeacherFromView").addEventListener("click", () => canManageMasters() && openTeacherDialog());
@@ -2210,7 +2207,7 @@ function bindEvents() {
   $("#addHall").addEventListener("click", () => canManageMasters() && addOrEditHall());
   $("#addHallBooking").addEventListener("click", () => canManageMasters() && addOrEditHallBooking());
   $("#generateCertificates").addEventListener("click", () => canManageMasters() && generateCertificates());
-  $("#globalSearch").addEventListener("input", renderRegistrations);
+  $("#globalSearch")?.addEventListener("input", renderRegistrations);
   $("#portalFilterToggle").addEventListener("click", () => {
     const row = $("#portalFilterRow");
     row.hidden = !row.hidden;
