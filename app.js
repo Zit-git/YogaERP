@@ -885,6 +885,22 @@ async function login(identifier, password) {
   showToast(`Logged in as ${currentSession.name}.`);
 }
 
+async function requestPasswordReset(identifier) {
+  if (!supabaseClient) {
+    showToast("Password reset requires Supabase users.");
+    return;
+  }
+  await loadSupabaseUsers({ showError: true });
+  if (usersLoadError) return;
+  const value = identifier.trim().toLowerCase();
+  const user = appUsers.find((item) => String(item.login_id || "").toLowerCase() === value);
+  if (!user) {
+    showToast("Username not found.");
+    return;
+  }
+  showToast("Please contact the administrator to reset your password.");
+}
+
 function logout() {
   currentSession = publicSession();
   linkBackStack = [];
@@ -2185,6 +2201,7 @@ function bindEvents() {
   $("#addProgram").addEventListener("click", () => canManageMasters() && openProgramDialog());
   $("#addTeacherFromView").addEventListener("click", () => canManageMasters() && openTeacherDialog());
   $("#addParticipantFromMaster").addEventListener("click", () => $("#registrationDialog").showModal());
+  $("#forgotPasswordButton").addEventListener("click", () => $("#forgotPasswordDialog").showModal());
   $("#previousMonth").addEventListener("click", () => {
     calendarDate = new Date(calendarDate.getFullYear(), calendarDate.getMonth() - 1, 1);
     renderCalendar();
@@ -2259,6 +2276,14 @@ function bindEvents() {
     await login(form.get("identifier"), form.get("password"));
     event.currentTarget.reset();
   });
+  $("#forgotPasswordForm").addEventListener("submit", async (event) => {
+    if (event.submitter?.value === "cancel") return;
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    $("#forgotPasswordDialog").close();
+    await requestPasswordReset(form.get("identifier"));
+    event.currentTarget.reset();
+  });
   document.body.addEventListener("click", (event) => {
     const logoutButton = event.target.closest("#logoutButton");
     if (logoutButton) {
@@ -2280,6 +2305,12 @@ function bindEvents() {
     if (cancelRegistration) {
       event.preventDefault();
       $("#registrationDialog").close();
+      return;
+    }
+    const cancelForgotPassword = event.target.closest("#closeForgotPassword, #cancelForgotPassword");
+    if (cancelForgotPassword) {
+      event.preventDefault();
+      $("#forgotPasswordDialog").close();
       return;
     }
     const cancelCourse = event.target.closest("#closeCourse, #cancelCourse");

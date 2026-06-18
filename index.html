@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Aliyar Program Management</title>
     <link rel="icon" href="favicon.svg" type="image/svg+xml">
-    <link rel="stylesheet" href="styles.css?v=46">
+    <link rel="stylesheet" href="styles.css?v=49">
   </head>
   <body>
     <aside class="sidebar" aria-label="Primary navigation">
@@ -85,6 +85,7 @@
               <label>Password<input name="password" type="password" placeholder="Password" required></label>
               <button class="primary-button" type="submit">Login</button>
             </form>
+            <button class="text-link-button forgot-password-button" id="forgotPasswordButton" type="button">Forgot password?</button>
           </section>
         </div>
       </section>
@@ -363,6 +364,25 @@
       </form>
     </dialog>
 
+    <dialog id="forgotPasswordDialog">
+      <form method="dialog" id="forgotPasswordForm">
+        <div class="modal-header">
+          <div>
+            <p class="eyebrow">Account Help</p>
+            <h2>Forgot Password</h2>
+          </div>
+          <button class="icon-button" id="closeForgotPassword" value="cancel" aria-label="Close" type="button">x</button>
+        </div>
+        <div class="form-grid">
+          <label class="wide">Username<input name="identifier" placeholder="Username" required></label>
+        </div>
+        <menu>
+          <button class="secondary-button" id="cancelForgotPassword" value="cancel" type="button">Cancel</button>
+          <button class="primary-button" value="default" type="submit">Request Reset</button>
+        </menu>
+      </form>
+    </dialog>
+
     <dialog id="courseDialog">
       <form method="dialog" id="courseForm">
         <div class="modal-header">
@@ -483,6 +503,6 @@
     <div id="toast" role="status" aria-live="polite"></div>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="supabase-config.js?v=35"></script>
-    <script src="app.js?v=48"></script>
+    <script src="app.js?v=49"></script>
   </body>
 </html>

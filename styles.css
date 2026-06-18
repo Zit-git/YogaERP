@@ -301,6 +301,10 @@ textarea { resize: vertical; }
   gap: 12px;
 }
 
+.forgot-password-button {
+  margin-top: 10px;
+}
+
 .login-form label {
   display: grid;
   gap: 6px;
