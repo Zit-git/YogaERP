@@ -1769,7 +1769,6 @@ function renderTeachers() {
   }
   const conducted = state.courses.filter((course) => course.teacher === selected.name);
   $("#teacherDetail").innerHTML = `
-    <button class="secondary-button link-back-button" type="button" data-record-back="teachers">Back to Teachers</button>
     ${backLinkHtml()}
     <div class="profile-card">
       <img class="profile-photo" src="${teacherPhoto(selected)}" alt="${selected.name} profile photo">

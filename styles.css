@@ -232,6 +232,32 @@ textarea { resize: vertical; }
   margin-bottom: 12px;
 }
 
+.detail-back-button {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  margin-bottom: 10px;
+  border: 1px solid #d8e0ea;
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.detail-back-button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: #f8fafc;
+}
+
+.teachers-master-layout.detail-open .teacher-detail-back {
+  display: inline-flex;
+}
+
 .ghost-button {
   color: #cbd5e1;
   background: rgba(148, 163, 184, 0.1);
