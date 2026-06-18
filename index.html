@@ -491,7 +491,7 @@
           <label>Start Date<input name="start" type="date" required></label>
           <label>End Date<input name="end" type="date" required></label>
           <label>Seats<input name="seats" type="number" min="1" max="500" required></label>
-          <label>Teacher<input name="teacher" placeholder="Teacher name" required></label>
+          <label>Teacher<select name="teacher" id="batchTeacherSelect" required></select></label>
           <label>Program Hall<select name="hallId" id="hallSelect" required></select></label>
           <label class="wide">Eligibility<textarea name="eligibility" rows="3" placeholder="Age, prior course, health, or practice requirements" required></textarea></label>
         </div>
@@ -518,6 +518,7 @@
           <label>Parent Course<select name="parentId" id="programParentSelect"></select></label>
           <label>Level<input name="level" placeholder="Family, Level 1, Level 2" required></label>
           <label>Duration<input name="duration" placeholder="7 days"></label>
+          <label class="wide">Associated Teachers<select name="teacherIds" id="programTeacherSelect" multiple></select></label>
           <label class="wide">Eligibility<textarea name="eligibility" rows="3" required></textarea></label>
         </div>
         <menu>
@@ -671,6 +672,6 @@
     <div id="toast" role="status" aria-live="polite"></div>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="supabase-config.js?v=35"></script>
-    <script src="app.js?v=70"></script>
+    <script src="app.js?v=71"></script>
   </body>
 </html>

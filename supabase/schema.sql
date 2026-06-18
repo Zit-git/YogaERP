@@ -9,6 +9,7 @@ create table if not exists public.course_masters (
   duration text,
   eligibility text,
   session_templates jsonb not null default '[]'::jsonb,
+  teacher_ids jsonb not null default '[]'::jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

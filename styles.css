@@ -703,6 +703,34 @@ textarea { resize: vertical; }
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
 
+.teacher-association-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.teacher-association-pill {
+  display: grid;
+  gap: 2px;
+  min-width: 180px;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text);
+  text-align: left;
+}
+
+.teacher-association-pill:hover {
+  border-color: var(--accent);
+  background: #f0fdfa;
+}
+
+.teacher-association-pill span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .program-node span {
   color: var(--muted);
   font-size: 12px;

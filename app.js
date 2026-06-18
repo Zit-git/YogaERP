@@ -244,7 +244,8 @@ async function loadRelationalData() {
       level: program.level || "",
       duration: program.duration || "",
       eligibility: program.eligibility || "",
-      sessionTemplates: program.session_templates || []
+      sessionTemplates: program.session_templates || [],
+      teacherIds: program.teacher_ids || []
     })),
     teachers: teachers.map((teacher) => ({
       id: teacher.id,
@@ -393,6 +394,7 @@ async function syncRelationalTables() {
       duration: program.duration || "",
       eligibility: program.eligibility || "",
       session_templates: program.sessionTemplates || [],
+      teacher_ids: program.teacherIds || [],
       updated_at: now
     }));
   const teacherRows = state.teachers.map((teacher) => ({
@@ -577,6 +579,7 @@ function migrateState() {
         { id: `${program.id}-s2`, day: 1, title: "Evening Satsang", time: "17:00-18:30", topic: `${program.name} review` }
       ];
     }
+    if (!Array.isArray(program.teacherIds)) program.teacherIds = [];
   });
   state.hallBookings.forEach((booking) => {
     booking.notes = (booking.notes || "").replaceAll("batch", "program").replaceAll("Batch", "Program");
@@ -741,6 +744,17 @@ function allRegistrationRows() {
 
 function teacherByName(name) {
   return state.teachers.find((teacher) => teacher.name === name) || null;
+}
+
+function teacherNameById(teacherId) {
+  return state.teachers.find((teacher) => teacher.id === teacherId)?.name || "";
+}
+
+function teachersForProgram(programId) {
+  const program = state.programs.find((item) => item.id === programId);
+  if (!program) return [];
+  const ids = Array.isArray(program.teacherIds) ? program.teacherIds : [];
+  return ids.map((teacherId) => state.teachers.find((teacher) => teacher.id === teacherId)).filter(Boolean);
 }
 
 function courseDays(courseId) {
@@ -1160,7 +1174,6 @@ function bulkFieldDefinitions(key) {
     courses: [
       { name: "status", label: "Status", type: "select", options: ["Upcoming", "Active", "Completed"].map((value) => ({ value, label: value })) },
       { name: "hallId", label: "Program Hall", type: "select", options: state.halls.map((hall) => ({ value: hall.id, label: hall.name })) },
-      { name: "teacher", label: "Teacher Name", type: "text" },
       { name: "seats", label: "Seats", type: "number" }
     ],
     programs: [
@@ -1958,6 +1971,7 @@ function renderProgramDetail() {
     return;
   }
   const sessions = program.sessionTemplates || [];
+  const associatedTeachers = teachersForProgram(program.id);
   const conducted = conductedProgramsForCourse(program);
   $("#programDetail").innerHTML = `
     <div class="batch-detail-heading">
@@ -1973,6 +1987,7 @@ function renderProgramDetail() {
       <div><span>Eligibility</span><strong>${program.eligibility}</strong></div>
       <div><span>Parent Course</span><strong>${state.programs.find((item) => item.id === program.parentId)?.name || "Root course family"}</strong></div>
       <div><span>Child Courses</span><strong>${programChildren(program.id).length}</strong></div>
+      <div><span>Teachers</span><strong>${associatedTeachers.length}</strong></div>
       <div><span>Session Plan</span><strong>${sessions.length} session(s)</strong></div>
       <div><span>Programs Conducted</span><strong>${conducted.length}</strong></div>
     </div>
@@ -1982,6 +1997,20 @@ function renderProgramDetail() {
         <span class="muted">Context for this course</span>
       </div>
       ${renderProgramHierarchyContext(program)}
+    </section>
+    <section class="participant-subform">
+      <div class="subform-header">
+        <h3>Associated Teachers</h3>
+        <span class="muted">${associatedTeachers.length} teacher(s)</span>
+      </div>
+      <div class="teacher-association-list">
+        ${associatedTeachers.length ? associatedTeachers.map((teacher) => `
+          <button class="teacher-association-pill" type="button" data-linked-teacher="${teacher.id}">
+            <strong>${teacher.name}</strong>
+            <span>${teacher.speciality || "Faculty"}</span>
+          </button>
+        `).join("") : `<span class="muted">No teachers are associated with this course yet. Edit Course to add teachers.</span>`}
+      </div>
     </section>
     <section class="participant-subform">
       <div class="subform-header">
@@ -2624,6 +2653,8 @@ function renderCourseOptions() {
     .filter((program) => program.parentId)
     .map((program) => `<option value="${program.id}">${program.name}</option>`)
     .join("");
+  renderBatchTeacherOptions();
+  renderProgramTeacherOptions();
 }
 
 function renderProgramParentOptions(currentId = "") {
@@ -2632,6 +2663,19 @@ function renderProgramParentOptions(currentId = "") {
     .map((program) => `<option value="${program.id}">${program.name}</option>`)
     .join("");
   $("#programParentSelect").innerHTML = `<option value="">No parent / root course</option>${options}`;
+}
+
+function renderProgramTeacherOptions(selectedIds = []) {
+  const selected = new Set(selectedIds);
+  $("#programTeacherSelect").innerHTML = state.teachers.map((teacher) => `<option value="${teacher.id}" ${selected.has(teacher.id) ? "selected" : ""}>${teacher.name}</option>`).join("");
+}
+
+function renderBatchTeacherOptions(selectedTeacherName = "") {
+  const programId = $("#batchProgramSelect")?.value || "";
+  const teachers = teachersForProgram(programId);
+  $("#batchTeacherSelect").innerHTML = teachers.length
+    ? teachers.map((teacher) => `<option value="${teacher.name}" ${teacher.name === selectedTeacherName ? "selected" : ""}>${teacher.name}</option>`).join("")
+    : `<option value="">No teachers associated with this course</option>`;
 }
 
 function renderAll() {
@@ -3222,6 +3266,7 @@ function openProgramDialog(programId = "") {
   form.reset();
   form.elements.id.value = programId;
   renderProgramParentOptions(programId);
+  renderProgramTeacherOptions();
   if (programId) {
     const program = state.programs.find((item) => item.id === programId);
     if (!program) return;
@@ -3232,6 +3277,7 @@ function openProgramDialog(programId = "") {
     form.elements.level.value = program.level;
     form.elements.duration.value = program.duration || "";
     form.elements.eligibility.value = program.eligibility;
+    renderProgramTeacherOptions(program.teacherIds || []);
   } else {
     $("#programDialogTitle").textContent = "Add Course";
   }
@@ -3346,6 +3392,7 @@ function bindEvents() {
     hallTab = button.dataset.hallTab;
     renderHalls();
   });
+  $("#batchProgramSelect").addEventListener("change", () => renderBatchTeacherOptions());
   document.body.addEventListener("input", (event) => {
     const filter = event.target.closest("[data-column-filter]");
     if (!filter) return;
@@ -3837,6 +3884,11 @@ function bindEvents() {
     const hallId = form.get("hallId");
     const programId = form.get("programId");
     const program = state.programs.find((item) => item.id === programId);
+    const teacherName = form.get("teacher").trim();
+    if (!teacherName) {
+      showToast("Assign teachers to this Course Master before scheduling a program.");
+      return;
+    }
     const courseId = newId("course");
     const courseData = {
       id: courseId,
@@ -3847,7 +3899,7 @@ function bindEvents() {
       seats: Number(form.get("seats")),
       hallId,
       hall: hallName(hallId),
-      teacher: form.get("teacher").trim(),
+      teacher: teacherName,
       eligibility: form.get("eligibility").trim() || program?.eligibility || ""
     };
     courseData.status = programLifecycleStatus(courseData);
@@ -3882,7 +3934,8 @@ function bindEvents() {
       level: form.get("level").trim(),
       duration: form.get("duration").trim(),
       eligibility: form.get("eligibility").trim(),
-      sessionTemplates: existingProgram?.sessionTemplates || []
+      sessionTemplates: existingProgram?.sessionTemplates || [],
+      teacherIds: Array.from(event.currentTarget.elements.teacherIds.selectedOptions).map((option) => option.value)
     };
     const existingIndex = state.programs.findIndex((program) => program.id === programData.id);
     if (existingIndex >= 0) {
