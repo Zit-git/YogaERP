@@ -81,8 +81,8 @@ function createSupabaseClient() {
   if (!hasConfig || !window.supabase?.createClient) return null;
   return window.supabase.createClient(config.url, config.anonKey, {
     auth: {
-      persistSession: false,
-      autoRefreshToken: false,
+      persistSession: true,
+      autoRefreshToken: true,
       detectSessionInUrl: false
     }
   });
