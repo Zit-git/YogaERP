@@ -10,8 +10,9 @@ const emptyState = () => ({
   participants: []
 });
 
+const appSessionStorageKey = "aliyar.currentSession.v1";
 const state = emptyState();
-let currentSession = publicSession();
+let currentSession = loadCachedSession();
 const supabaseClient = createSupabaseClient();
 let accessRoles = [];
 let accessUsers = [];
@@ -157,6 +158,7 @@ async function refreshAuthSession() {
   const { data, error } = await supabaseClient.auth.getSession();
   if (error || !data.session?.user) {
     currentSession = publicSession();
+    cacheCurrentSession();
     return;
   }
   await applyAuthUserSession(data.session.user);
@@ -171,6 +173,7 @@ async function applyAuthUserSession(user, { showError = false } = {}) {
     .maybeSingle();
   if (error || !roleRecord) {
     currentSession = publicSession();
+    cacheCurrentSession();
     if (showError) showToast("Login found, but no role is assigned in Supabase.");
     return false;
   }
@@ -182,6 +185,7 @@ async function applyAuthUserSession(user, { showError = false } = {}) {
     .maybeSingle();
   if (roleError || !role) {
     currentSession = publicSession();
+    cacheCurrentSession();
     if (showError) showToast("Login found, but the assigned role is inactive or missing.");
     return false;
   }
@@ -197,6 +201,7 @@ async function applyAuthUserSession(user, { showError = false } = {}) {
       canMarkAttendance: Boolean(role.can_mark_attendance)
     }
   };
+  cacheCurrentSession();
   return true;
 }
 
@@ -523,6 +528,40 @@ function publicSession() {
       canMarkAttendance: false
     }
   };
+}
+
+function loadCachedSession() {
+  try {
+    const cached = window.localStorage?.getItem(appSessionStorageKey);
+    if (!cached) return publicSession();
+    const session = JSON.parse(cached);
+    if (!session?.role || session.role === "public" || !session.permissions) return publicSession();
+    return {
+      role: session.role,
+      id: session.id || "",
+      userId: session.userId || "",
+      name: session.name || "User",
+      permissions: {
+        canManageMasters: Boolean(session.permissions.canManageMasters),
+        canReviewRegistrations: Boolean(session.permissions.canReviewRegistrations),
+        canMarkAttendance: Boolean(session.permissions.canMarkAttendance)
+      }
+    };
+  } catch {
+    return publicSession();
+  }
+}
+
+function cacheCurrentSession() {
+  try {
+    if (currentSession.role === "public") {
+      window.localStorage?.removeItem(appSessionStorageKey);
+      return;
+    }
+    window.localStorage?.setItem(appSessionStorageKey, JSON.stringify(currentSession));
+  } catch {
+    // Session caching is a convenience only; Supabase Auth remains authoritative.
+  }
 }
 
 function migrateState() {
@@ -921,6 +960,7 @@ async function requestPasswordReset(identifier) {
 async function logout() {
   if (supabaseClient) await supabaseClient.auth.signOut();
   currentSession = publicSession();
+  cacheCurrentSession();
   linkBackStack = [];
   renderNav();
   renderAll();
