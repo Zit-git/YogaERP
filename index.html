@@ -115,6 +115,10 @@
           </div>
           <button class="primary-button" id="addProgram" type="button">Add Course</button>
         </div>
+        <div class="segmented subnav course-master-tabs" id="courseMasterTabs">
+          <button data-course-master-tab="details" type="button" class="is-selected">Course Details</button>
+          <button data-course-master-tab="hierarchy" type="button">Course Hierarchy</button>
+        </div>
         <div class="program-master-layout">
           <section class="panel program-hierarchy-panel">
             <div class="panel-header">
@@ -646,6 +650,6 @@
     <div id="toast" role="status" aria-live="polite"></div>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="supabase-config.js?v=35"></script>
-    <script src="app.js?v=63"></script>
+    <script src="app.js?v=64"></script>
   </body>
 </html>

@@ -605,12 +605,24 @@ textarea { resize: vertical; }
 }
 
 .program-master-layout {
-  display: grid;
-  grid-template-columns: minmax(320px, 0.85fr) minmax(0, 1.15fr);
-  gap: 14px;
+  display: block;
 }
 
 .program-master-layout.detail-open {
+  display: block;
+}
+
+.course-master-tabs.is-hidden {
+  display: none;
+}
+
+.program-master-layout:not(.detail-open) .program-hierarchy-panel,
+.program-master-layout:not(.detail-open) .program-list-panel {
+  display: none;
+}
+
+.program-master-layout[data-active-tab="hierarchy"]:not(.detail-open) .program-hierarchy-panel,
+.program-master-layout[data-active-tab="details"]:not(.detail-open) .program-list-panel {
   display: block;
 }
 
@@ -641,6 +653,7 @@ textarea { resize: vertical; }
   border-radius: 8px;
   background: #fff;
   padding: 10px;
+  cursor: pointer;
 }
 
 .program-node.is-parent {

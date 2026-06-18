@@ -30,6 +30,7 @@ let selectedProgramId = "";
 let selectedParticipantId = "";
 let selectedTeacherId = "";
 let linkBackStack = [];
+let courseMasterTab = "details";
 let accommodationTab = "blocks";
 let hallTab = "halls";
 let openDetailView = { courses: false, programs: false, teachers: false, participants: false };
@@ -1664,11 +1665,16 @@ function renderPrograms() {
     selectedProgramId = state.programs.find((program) => program.parentId)?.id || state.programs[0]?.id || "";
   }
   const layout = document.querySelector(".program-master-layout");
-  if (layout) layout.classList.toggle("detail-open", openDetailView.programs);
+  if (layout) {
+    layout.classList.toggle("detail-open", openDetailView.programs);
+    layout.dataset.activeTab = courseMasterTab;
+  }
+  $("#courseMasterTabs")?.classList.toggle("is-hidden", openDetailView.programs);
+  $$("#courseMasterTabs button").forEach((button) => button.classList.toggle("is-selected", button.dataset.courseMasterTab === courseMasterTab));
   const childrenFor = (parentId) => state.programs.filter((program) => program.parentId === parentId);
   const renderNode = (program) => {
     const children = childrenFor(program.id);
-    return `<div class="program-node ${program.parentId ? "is-child" : "is-parent"} ${program.id === selectedProgramId ? "is-selected" : ""}">
+    return `<div class="program-node ${program.parentId ? "is-child" : "is-parent"} ${program.id === selectedProgramId ? "is-selected" : ""}" data-program-view="${program.id}" tabindex="0">
       <div>
         <strong>${program.name}</strong>
         <span>${program.code} | ${program.level}${program.duration ? ` | ${program.duration}` : ""}</span>
@@ -3122,6 +3128,12 @@ function bindEvents() {
     currentFilter = button.dataset.filter;
     $$("#registrationFilter button").forEach((item) => item.classList.toggle("is-selected", item === button));
     renderRegistrations();
+  });
+  $("#courseMasterTabs").addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-course-master-tab]");
+    if (!button) return;
+    courseMasterTab = button.dataset.courseMasterTab;
+    renderPrograms();
   });
   $("#accommodationTabs").addEventListener("click", (event) => {
     const button = event.target.closest("button[data-accommodation-tab]");
