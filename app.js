@@ -86,9 +86,9 @@ const views = [
 
 const roleViews = {
   public: ["portal"],
-  participant: ["portal", "courses", "participants", "history"],
-  teacher: ["portal", "dashboard", "courses", "teachers", "participants", "history"],
-  admin: views.map(([id]) => id)
+  participant: ["courses", "participants", "history"],
+  teacher: ["dashboard", "courses", "teachers", "participants", "history"],
+  admin: views.filter(([id]) => id !== "portal").map(([id]) => id)
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -637,6 +637,10 @@ function allowedViews() {
   return roleViews[currentSession.role] || roleViews.public;
 }
 
+function defaultViewForRole(role = currentSession.role) {
+  return (roleViews[role] || roleViews.public)[0] || "portal";
+}
+
 function canAccessView(viewId) {
   return allowedViews().includes(viewId);
 }
@@ -701,7 +705,7 @@ function login(role, identifier) {
   linkBackStack = [];
   renderNav();
   renderAll();
-  activateView(role === "admin" ? "dashboard" : "portal");
+  activateView(defaultViewForRole(role));
   showToast(`Logged in as ${record.name}.`);
 }
 
@@ -784,7 +788,7 @@ function renderNav() {
 
 function activateView(id) {
   const candidateId = views.some(([viewId]) => viewId === id) ? id : "portal";
-  const targetId = canAccessView(candidateId) ? candidateId : "portal";
+  const targetId = canAccessView(candidateId) ? candidateId : defaultViewForRole();
   $$("#nav button").forEach((button) => button.classList.toggle("is-active", button.dataset.view === targetId));
   const targetView = $(`#${targetId}`);
   if (targetView) {
@@ -2414,5 +2418,5 @@ function bindEvents() {
 renderNav();
 bindEvents();
 renderAll();
-activateView(canAccessView("dashboard") && currentSession.role === "admin" ? "dashboard" : "portal");
+activateView(defaultViewForRole());
 loadRemoteData();
