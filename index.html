@@ -68,15 +68,8 @@
               </div>
             </div>
             <form id="loginForm" class="login-form">
-              <label>Login As
-                <select name="role" id="loginRole">
-                  <option value="participant">Participant</option>
-                  <option value="teacher">Teacher</option>
-                  <option value="admin">Admin</option>
-                </select>
-              </label>
-              <label>Login ID<input name="identifier" placeholder="Supabase user login ID" required></label>
-              <label>Password<input name="password" type="password" placeholder="Optional for current setup"></label>
+              <label>Username<input name="identifier" placeholder="Username" required></label>
+              <label>Password<input name="password" type="password" placeholder="Password" required></label>
               <button class="primary-button" type="submit">Login</button>
             </form>
           </section>
@@ -477,6 +470,6 @@
     <div id="toast" role="status" aria-live="polite"></div>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="supabase-config.js?v=35"></script>
-    <script src="app.js?v=40"></script>
+    <script src="app.js?v=42"></script>
   </body>
 </html>

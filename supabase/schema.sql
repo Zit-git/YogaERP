@@ -137,6 +137,7 @@ create table if not exists public.hall_bookings (
 create table if not exists public.users (
   id text primary key default gen_random_uuid()::text,
   login_id text not null unique,
+  password text not null default 'changeme',
   role text not null check (role in ('admin', 'teacher', 'participant')),
   display_name text not null,
   linked_teacher_id text references public.teachers(id) on delete set null,
@@ -148,6 +149,9 @@ create table if not exists public.users (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.users
+  add column if not exists password text not null default 'changeme';
 
 alter table public.app_state enable row level security;
 alter table public.course_masters enable row level security;

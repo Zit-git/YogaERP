@@ -35,9 +35,12 @@ Refresh the app. The sidebar should show `Supabase connected` or `Supabase synce
 
 Login is controlled by the `public.users` table.
 
-- Admin login: `admin`
-- Teacher login: teacher email, created from `public.teachers`
-- Participant login: participant phone number, created from `public.participants`
+- Admin username: `admin`, default password: `admin123`
+- Teacher username: teacher email, default password: `changeme`
+- Participant username: participant phone number, default password: `changeme`
+
+Change the `password` value in `public.users` after the generated rows are created.
+If the `users` table already exists, rerun [supabase/users_and_roles.sql](supabase/users_and_roles.sql) once to add the `password` column and default passwords.
 
 Permissions are controlled by:
 

@@ -118,7 +118,7 @@ async function loadSupabaseUsers() {
   if (!supabaseClient) return;
   const { data, error } = await supabaseClient
     .from("users")
-    .select("id, login_id, role, display_name, linked_teacher_id, linked_participant_id, can_manage_masters, can_review_registrations, can_mark_attendance, active")
+    .select("id, login_id, password, role, display_name, linked_teacher_id, linked_participant_id, can_manage_masters, can_review_registrations, can_mark_attendance, active")
     .eq("active", true)
     .order("display_name");
   if (error) {
@@ -831,12 +831,16 @@ function visibleRegistrationRows() {
   return allRegistrationRows();
 }
 
-function findLoginRecord(role, identifier) {
+function findLoginRecord(identifier, password) {
   const value = identifier.trim().toLowerCase();
-  return appUsers.find((user) => user.role === role && String(user.login_id || "").toLowerCase() === value) || null;
+  return appUsers.find((user) => {
+    const loginMatches = String(user.login_id || "").toLowerCase() === value;
+    const passwordMatches = String(user.password || "") === String(password || "");
+    return loginMatches && passwordMatches;
+  }) || null;
 }
 
-async function login(role, identifier) {
+async function login(identifier, password) {
   if (!supabaseClient) {
     showToast("Supabase is not configured. Login requires Supabase users.");
     return;
@@ -846,11 +850,12 @@ async function login(role, identifier) {
     return;
   }
   await loadSupabaseUsers();
-  const record = findLoginRecord(role, identifier);
+  const record = findLoginRecord(identifier, password);
   if (!record) {
-    showToast("Login user not found in Supabase users table.");
+    showToast("Invalid username or password.");
     return;
   }
+  const role = record.role;
   const linkedId = role === "participant" ? record.linked_participant_id : role === "teacher" ? record.linked_teacher_id : record.id;
   currentSession = {
     role,
@@ -2202,7 +2207,7 @@ function bindEvents() {
   $("#loginForm").addEventListener("submit", async (event) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    await login(form.get("role"), form.get("identifier"));
+    await login(form.get("identifier"), form.get("password"));
     event.currentTarget.reset();
   });
   document.body.addEventListener("click", (event) => {
