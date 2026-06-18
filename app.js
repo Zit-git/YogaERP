@@ -1714,7 +1714,8 @@ function renderCourses() {
     { key: "start", label: "Schedule", value: (course) => `${course.start} ${course.end}` },
     { key: "teacher", label: "Teacher", value: (course) => course.teacher },
     { key: "seats", label: "Seats", value: (course) => Number(course.seats) },
-    { key: "hall", label: "Hall", value: (course) => course.hall }
+    { key: "hall", label: "Hall", value: (course) => course.hall },
+    { key: "actions", label: "Actions", value: () => "", sort: false, filter: false }
   ];
   ensureTableChrome("batchRows", "courses", columns);
   const result = tableRows("courses", state.courses, columns, {
@@ -1736,9 +1737,10 @@ function renderCourses() {
         <td>${teacherByName(course.teacher) ? `<button class="text-link-button" type="button" data-linked-teacher="${teacherByName(course.teacher).id}">${course.teacher}</button>` : course.teacher}</td>
         <td>${registered}/${course.seats}</td>
         <td>${course.hall}</td>
+        <td>${status !== "Completed" && currentSession.role !== "participant" ? `<button class="secondary-button" type="button" data-course-register="${course.id}">Register</button>` : "<span class=\"muted\">Not available</span>"}</td>
       </tr>
     `;
-  }).join("") || `<tr><td colspan="${canManageMasters() ? 6 : 5}"><span class="muted">No programs found.</span></td></tr>`;
+  }).join("") || `<tr><td colspan="${canManageMasters() ? 7 : 6}"><span class="muted">No programs found.</span></td></tr>`;
   renderTablePagination("courses", result);
   renderBatchDetail();
 }
