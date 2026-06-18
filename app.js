@@ -82,16 +82,19 @@ async function loadRemoteData() {
       .eq("id", "current")
       .maybeSingle();
     if (error) throw error;
+    let lifecycleChanged = false;
     if (data?.payload) {
       Object.keys(state).forEach((key) => delete state[key]);
       Object.assign(state, data.payload);
       migrateState();
+      lifecycleChanged = applyProgramLifecycleStatuses();
       remoteStatus = "Supabase connected";
     } else {
       const relationalState = await loadRelationalData();
       Object.keys(state).forEach((key) => delete state[key]);
       Object.assign(state, relationalState);
       migrateState();
+      lifecycleChanged = applyProgramLifecycleStatuses();
       remoteStatus = hasAnyRecords(state) ? "Supabase connected" : "Supabase connected - no records yet";
     }
     hasLoadedRemoteData = true;
@@ -101,6 +104,7 @@ async function loadRemoteData() {
     isHydratingRemoteData = false;
     if (!canAccessView(currentViewId())) activateView(defaultViewForRole());
     renderNav();
+    if (lifecycleChanged) persistRemoteData();
   } catch (error) {
     remoteStatus = "Supabase unavailable";
     hasLoadedRemoteData = false;
@@ -242,6 +246,7 @@ async function loadRelationalData() {
         hall: hall?.name || "",
         teacher: batch.teacher_name || teachers.find((teacher) => teacher.id === batch.teacher_id)?.name || "",
         eligibility: batch.eligibility || "",
+        status: batch.status || "",
         sessions: batch.sessions || []
       };
     }),
@@ -403,6 +408,7 @@ async function syncRelationalTables() {
       teacher_id: teacher?.id || null,
       teacher_name: course.teacher || "",
       eligibility: course.eligibility || "",
+      status: course.status || programLifecycleStatus(course),
       sessions: course.sessions || [],
       updated_at: now
     };
@@ -918,6 +924,42 @@ function isDateInRange(date, start, end) {
   return day >= start.getTime() && day <= end.getTime();
 }
 
+function startOfToday() {
+  const today = new Date();
+  return new Date(today.getFullYear(), today.getMonth(), today.getDate());
+}
+
+function dateFromInput(value) {
+  if (!value) return null;
+  const date = new Date(`${value}T00:00:00`);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function programLifecycleStatus(course) {
+  const start = dateFromInput(course.start);
+  const end = dateFromInput(course.end);
+  const today = startOfToday();
+  if (end && end < today) return "Completed";
+  if (start && start > today) return "Upcoming";
+  return "Active";
+}
+
+function applyProgramLifecycleStatuses() {
+  let changed = false;
+  state.courses.forEach((course) => {
+    const status = programLifecycleStatus(course);
+    if (course.status !== status) {
+      course.status = status;
+      changed = true;
+    }
+  });
+  return changed;
+}
+
+function isPortalProgram(course) {
+  return programLifecycleStatus(course) !== "Completed";
+}
+
 function showToast(message) {
   const toast = $("#toast");
   toast.textContent = message;
@@ -1008,11 +1050,12 @@ function renderAuthState() {
 }
 
 function renderPortal() {
-  const rows = state.courses.map((course) => {
+  const upcomingPrograms = state.courses.filter(isPortalProgram);
+  const rows = upcomingPrograms.map((course) => {
     const registered = allRegistrationRows().filter(({ registration }) => registration.courseId === course.id).length;
     const teacher = teacherByName(course.teacher);
     return `<tr>
-      <td><strong>${course.name}</strong><br><span class="muted">${course.eligibility}</span></td>
+      <td><strong>${course.name}</strong><br><span class="muted">${course.eligibility}</span><br><span class="pill ${statusClass(course.status || programLifecycleStatus(course))}">${course.status || programLifecycleStatus(course)}</span></td>
       <td>${course.start}<br><span class="muted">${course.end}</span></td>
       <td>${teacher ? `<button class="text-link-button" type="button" data-linked-teacher="${teacher.id}">${course.teacher}</button>` : course.teacher}</td>
       <td>${registered}/${course.seats}</td>
@@ -1020,7 +1063,7 @@ function renderPortal() {
       <td><button class="secondary-button" type="button" data-public-register="${course.id}">Register</button></td>
     </tr>`;
   }).join("");
-  $("#portalBatchRows").innerHTML = rows;
+  $("#portalBatchRows").innerHTML = rows || `<tr><td colspan="6"><span class="muted">No upcoming programs are open for registration.</span></td></tr>`;
 }
 
 function renderPermissionChrome() {
@@ -1115,9 +1158,10 @@ function renderCourses() {
   $("#batchRows").innerHTML = state.courses.map((course) => {
     const registered = allRegistrationRows().filter(({ registration }) => registration.courseId === course.id).length;
     const sessions = courseSessionPlan(course.id);
+    const status = course.status || programLifecycleStatus(course);
     return `
       <tr class="batch-master-row ${selectedCourseId === course.id ? "participant-row-selected" : ""}" data-batch-view="${course.id}" tabindex="0">
-        <td><strong>${course.name}</strong><br><span class="muted">${course.eligibility} | ${sessions.length} session(s)</span></td>
+        <td><strong>${course.name}</strong><br><span class="muted">${course.eligibility} | ${sessions.length} session(s)</span><br><span class="pill ${statusClass(status)}">${status}</span></td>
         <td>${course.start}<br><span class="muted">${course.end}</span></td>
         <td>${teacherByName(course.teacher) ? `<button class="text-link-button" type="button" data-linked-teacher="${teacherByName(course.teacher).id}">${course.teacher}</button>` : course.teacher}</td>
         <td>${registered}/${course.seats}</td>
@@ -1141,15 +1185,16 @@ function renderBatchDetail() {
   const sessions = courseSessionPlan(course.id);
   const completedCount = attendanceRows.filter(({ registration }) => registration.completion === "Completed").length;
   const teacher = teacherByName(course.teacher);
+  const status = course.status || programLifecycleStatus(course);
   const showBatchActions = canManageMasters();
-  const showRegistrationAction = currentSession.role !== "participant";
+  const showRegistrationAction = currentSession.role !== "participant" && status !== "Completed";
   const allowAttendance = canMarkAttendance();
   $("#batchDetail").innerHTML = `
     ${backLinkHtml()}
     <div class="batch-detail-heading">
       <div>
         <h3>${course.name}</h3>
-        <p class="muted">${course.eligibility}</p>
+        <p class="muted">${course.eligibility} | ${status}</p>
       </div>
       <div class="row-actions">
         ${showBatchActions ? `<button class="primary-button" type="button" data-apply-course-sessions="${course.id}">Apply Course Sessions</button>` : ""}
@@ -1161,6 +1206,7 @@ function renderBatchDetail() {
       <div><span>Seats</span><strong>${registered}/${course.seats}</strong></div>
       <div><span>Teacher</span><strong>${teacher ? `<button class="text-link-button" type="button" data-linked-teacher="${teacher.id}">${course.teacher}</button>` : course.teacher}</strong></div>
       <div><span>Hall</span><strong>${course.hall}</strong></div>
+      <div><span>Status</span><strong><span class="pill ${statusClass(status)}">${status}</span></strong></div>
       <div><span>Completed</span><strong>${completedCount}/${attendanceRows.length}</strong></div>
       <div><span>Sessions</span><strong>${sessions.length} session(s)</strong></div>
     </div>
@@ -1648,7 +1694,8 @@ function renderHistory() {
 }
 
 function renderCourseOptions() {
-  $("#courseSelect").innerHTML = state.courses.map((course) => `<option value="${course.id}">${course.name}</option>`).join("");
+  const registrationPrograms = state.courses.filter(isPortalProgram);
+  $("#courseSelect").innerHTML = registrationPrograms.map((course) => `<option value="${course.id}">${course.name}</option>`).join("");
   $("#hallSelect").innerHTML = state.halls.map((hall) => `<option value="${hall.id}">${hall.name} (${hall.capacity})</option>`).join("");
   $("#batchProgramSelect").innerHTML = state.programs
     .filter((program) => program.parentId)
@@ -1665,6 +1712,7 @@ function renderProgramParentOptions(currentId = "") {
 }
 
 function renderAll() {
+  applyProgramLifecycleStatuses();
   saveData();
   saveSession();
   renderAuthState();
@@ -2164,6 +2212,11 @@ function bindEvents() {
     }
     const publicRegister = event.target.closest("[data-public-register]");
     if (publicRegister) {
+      const course = state.courses.find((item) => item.id === publicRegister.dataset.publicRegister);
+      if (!course || !isPortalProgram(course)) {
+        showToast("Registration is open only for upcoming programs.");
+        return;
+      }
       $("#courseSelect").value = publicRegister.dataset.publicRegister;
       $("#registrationDialog").showModal();
       return;
@@ -2376,6 +2429,11 @@ function bindEvents() {
         showToast("Logout to use public registration.");
         return;
       }
+      const course = state.courses.find((item) => item.id === registerButton.dataset.courseRegister);
+      if (!course || !isPortalProgram(course)) {
+        showToast("Registration is open only for upcoming programs.");
+        return;
+      }
       $("#courseSelect").value = registerButton.dataset.courseRegister;
       $("#registrationDialog").showModal();
       return;
@@ -2512,6 +2570,7 @@ function bindEvents() {
       teacher: form.get("teacher").trim(),
       eligibility: form.get("eligibility").trim() || program?.eligibility || ""
     };
+    courseData.status = programLifecycleStatus(courseData);
     state.courses.push(courseData);
     courseData.sessions = defaultSessionPlan(courseId);
     state.hallBookings.push({

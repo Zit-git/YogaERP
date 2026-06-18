@@ -80,10 +80,14 @@ create table if not exists public.batches (
   teacher_id text references public.teachers(id) on delete set null,
   teacher_name text,
   eligibility text,
+  status text not null default 'Upcoming',
   sessions jsonb not null default '[]'::jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.batches
+  add column if not exists status text not null default 'Upcoming';
 
 create table if not exists public.participants (
   id text primary key,
