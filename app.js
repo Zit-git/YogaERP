@@ -16,6 +16,7 @@ const supabaseClient = createSupabaseClient();
 let hasLoadedRemoteData = false;
 let isHydratingRemoteData = false;
 let appUsers = [];
+let usersLoadError = "";
 let remoteSaveTimer = null;
 let remoteStatus = supabaseClient ? "Supabase connecting" : "Supabase not configured";
 let currentFilter = "all";
@@ -114,7 +115,7 @@ async function loadRemoteData() {
   }
 }
 
-async function loadSupabaseUsers() {
+async function loadSupabaseUsers({ showError = false } = {}) {
   if (!supabaseClient) return;
   const { data, error } = await supabaseClient
     .from("users")
@@ -123,9 +124,11 @@ async function loadSupabaseUsers() {
     .order("display_name");
   if (error) {
     appUsers = [];
-    showToast("Run supabase/users_and_roles.sql to enable login users.");
+    usersLoadError = "Run supabase/users_and_roles.sql to enable login users.";
+    if (showError) showToast(usersLoadError);
     return;
   }
+  usersLoadError = "";
   appUsers = data || [];
 }
 
@@ -849,7 +852,8 @@ async function login(identifier, password) {
     showToast("Supabase data is still loading. Please try again in a moment.");
     return;
   }
-  await loadSupabaseUsers();
+  await loadSupabaseUsers({ showError: true });
+  if (usersLoadError) return;
   const record = findLoginRecord(identifier, password);
   if (!record) {
     showToast("Invalid username or password.");
