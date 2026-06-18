@@ -2667,7 +2667,20 @@ function renderProgramParentOptions(currentId = "") {
 
 function renderProgramTeacherOptions(selectedIds = []) {
   const selected = new Set(selectedIds);
-  $("#programTeacherSelect").innerHTML = state.teachers.map((teacher) => `<option value="${teacher.id}" ${selected.has(teacher.id) ? "selected" : ""}>${teacher.name}</option>`).join("");
+  $("#programTeacherOptions").innerHTML = state.teachers.map((teacher) => `
+    <label class="multi-select-option">
+      <input type="checkbox" value="${teacher.id}" data-program-teacher-option ${selected.has(teacher.id) ? "checked" : ""}>
+      <span>${teacher.name}</span>
+    </label>
+  `).join("") || `<span class="muted">No teachers available.</span>`;
+  syncProgramTeacherSelection();
+}
+
+function syncProgramTeacherSelection() {
+  const selectedIds = $$("[data-program-teacher-option]:checked").map((input) => input.value);
+  $("#programTeacherIds").value = selectedIds.join(",");
+  const names = selectedIds.map(teacherNameById).filter(Boolean);
+  $("#programTeacherSummary").textContent = names.length ? `${names.length} selected: ${names.join(", ")}` : "Select teachers";
 }
 
 function renderBatchTeacherOptions(selectedTeacherName = "") {
@@ -3393,6 +3406,9 @@ function bindEvents() {
     renderHalls();
   });
   $("#batchProgramSelect").addEventListener("change", () => renderBatchTeacherOptions());
+  $("#programTeacherOptions").addEventListener("change", (event) => {
+    if (event.target.closest("[data-program-teacher-option]")) syncProgramTeacherSelection();
+  });
   document.body.addEventListener("input", (event) => {
     const filter = event.target.closest("[data-column-filter]");
     if (!filter) return;
@@ -3935,7 +3951,7 @@ function bindEvents() {
       duration: form.get("duration").trim(),
       eligibility: form.get("eligibility").trim(),
       sessionTemplates: existingProgram?.sessionTemplates || [],
-      teacherIds: Array.from(event.currentTarget.elements.teacherIds.selectedOptions).map((option) => option.value)
+      teacherIds: form.get("teacherIds").split(",").filter(Boolean)
     };
     const existingIndex = state.programs.findIndex((program) => program.id === programData.id);
     if (existingIndex >= 0) {

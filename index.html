@@ -518,7 +518,13 @@
           <label>Parent Course<select name="parentId" id="programParentSelect"></select></label>
           <label>Level<input name="level" placeholder="Family, Level 1, Level 2" required></label>
           <label>Duration<input name="duration" placeholder="7 days"></label>
-          <label class="wide">Associated Teachers<select name="teacherIds" id="programTeacherSelect" multiple></select></label>
+          <label class="wide">Associated Teachers
+            <input type="hidden" name="teacherIds" id="programTeacherIds">
+            <details class="multi-select" id="programTeacherSelect">
+              <summary id="programTeacherSummary">Select teachers</summary>
+              <div class="multi-select-menu" id="programTeacherOptions"></div>
+            </details>
+          </label>
           <label class="wide">Eligibility<textarea name="eligibility" rows="3" required></textarea></label>
         </div>
         <menu>
@@ -672,6 +678,6 @@
     <div id="toast" role="status" aria-live="polite"></div>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="supabase-config.js?v=35"></script>
-    <script src="app.js?v=71"></script>
+    <script src="app.js?v=72"></script>
   </body>
 </html>
