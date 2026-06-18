@@ -1,12 +1,5 @@
 create extension if not exists pgcrypto;
 
-do $$
-begin
-  if not exists (select 1 from pg_type where typname = 'app_role') then
-    create type public.app_role as enum ('admin', 'teacher', 'participant');
-  end if;
-end $$;
-
 create table if not exists public.app_state (
   id text primary key default 'current',
   payload jsonb not null,
@@ -141,15 +134,46 @@ create table if not exists public.hall_bookings (
   updated_at timestamptz not null default now()
 );
 
-create table if not exists public.user_roles (
-  user_id uuid primary key references auth.users(id) on delete cascade,
-  role public.app_role not null,
-  display_name text not null,
-  linked_teacher_id text references public.teachers(id) on delete set null,
-  linked_participant_id text references public.participants(id) on delete set null,
+create table if not exists public.roles (
+  id text primary key,
+  name text not null unique,
+  description text,
   can_manage_masters boolean not null default false,
   can_review_registrations boolean not null default false,
   can_mark_attendance boolean not null default false,
+  active boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+insert into public.roles (
+  id,
+  name,
+  description,
+  can_manage_masters,
+  can_review_registrations,
+  can_mark_attendance,
+  active
+)
+values
+  ('admin', 'Admin', 'Full administrative access', true, true, true, true),
+  ('teacher', 'Teacher', 'Faculty attendance and program access', false, false, true, true),
+  ('participant', 'Participant', 'Participant self-service access', false, false, false, true)
+on conflict (id) do update set
+  name = excluded.name,
+  description = excluded.description,
+  can_manage_masters = excluded.can_manage_masters,
+  can_review_registrations = excluded.can_review_registrations,
+  can_mark_attendance = excluded.can_mark_attendance,
+  active = excluded.active,
+  updated_at = now();
+
+create table if not exists public.user_roles (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  role_id text not null references public.roles(id) on delete restrict,
+  display_name text not null,
+  linked_teacher_id text references public.teachers(id) on delete set null,
+  linked_participant_id text references public.participants(id) on delete set null,
   active boolean not null default true,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -166,6 +190,7 @@ alter table public.batches enable row level security;
 alter table public.participants enable row level security;
 alter table public.registrations enable row level security;
 alter table public.hall_bookings enable row level security;
+alter table public.roles enable row level security;
 alter table public.user_roles enable row level security;
 
 create policy "temporary_demo_read_app_state"
@@ -178,6 +203,11 @@ create policy "temporary_demo_write_app_state"
   with check (true);
 
 drop policy if exists "user_roles_read_own" on public.user_roles;
+drop policy if exists "roles_read_active" on public.roles;
+
+create policy "roles_read_active"
+  on public.roles for select
+  using (active = true);
 
 create policy "user_roles_read_own"
   on public.user_roles for select

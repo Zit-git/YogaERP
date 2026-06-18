@@ -8,4 +8,5 @@ alter table public.batches disable row level security;
 alter table public.participants disable row level security;
 alter table public.registrations disable row level security;
 alter table public.hall_bookings disable row level security;
+alter table public.roles disable row level security;
 alter table public.user_roles disable row level security;

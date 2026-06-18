@@ -32,16 +32,53 @@ on conflict (id) do update set
   active = excluded.active,
   updated_at = now();
 
-create table if not exists public.user_roles (
-  user_id uuid primary key references auth.users(id) on delete cascade,
-  role_id text not null references public.roles(id) on delete restrict,
-  display_name text not null,
-  linked_teacher_id text references public.teachers(id) on delete set null,
-  linked_participant_id text references public.participants(id) on delete set null,
-  active boolean not null default true,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
+alter table public.user_roles
+  add column if not exists role_id text;
+
+do $$
+begin
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'user_roles'
+      and column_name = 'role'
+  ) then
+    update public.user_roles
+    set role_id = role::text
+    where role_id is null;
+  end if;
+end $$;
+
+update public.user_roles
+set role_id = 'participant'
+where role_id is null;
+
+alter table public.user_roles
+  alter column role_id set not null;
+
+do $$
+begin
+  if not exists (
+    select 1
+    from information_schema.table_constraints
+    where constraint_schema = 'public'
+      and table_name = 'user_roles'
+      and constraint_name = 'user_roles_role_id_fkey'
+  ) then
+    alter table public.user_roles
+      add constraint user_roles_role_id_fkey
+      foreign key (role_id)
+      references public.roles(id)
+      on delete restrict;
+  end if;
+end $$;
+
+alter table public.user_roles
+  drop column if exists role,
+  drop column if exists can_manage_masters,
+  drop column if exists can_review_registrations,
+  drop column if exists can_mark_attendance;
 
 alter table public.roles enable row level security;
 alter table public.user_roles enable row level security;
@@ -56,23 +93,3 @@ create policy "roles_read_active"
 create policy "user_roles_read_own"
   on public.user_roles for select
   using (auth.uid() = user_id);
-
--- Replace this email with the admin user you created in Supabase Authentication.
-insert into public.user_roles (
-  user_id,
-  role_id,
-  display_name,
-  active
-)
-select
-  id,
-  'admin',
-  coalesce(raw_user_meta_data->>'name', email, 'System Administrator'),
-  true
-from auth.users
-where email = 'REPLACE_WITH_ADMIN_EMAIL'
-on conflict (user_id) do update set
-  role_id = excluded.role_id,
-  display_name = excluded.display_name,
-  active = excluded.active,
-  updated_at = now();

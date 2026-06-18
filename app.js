@@ -129,7 +129,7 @@ async function refreshAuthSession() {
 async function applyAuthUserSession(user, { showError = false } = {}) {
   const { data: roleRecord, error } = await supabaseClient
     .from("user_roles")
-    .select("role, display_name, linked_teacher_id, linked_participant_id, can_manage_masters, can_review_registrations, can_mark_attendance, active")
+    .select("role_id, display_name, linked_teacher_id, linked_participant_id, active")
     .eq("user_id", user.id)
     .eq("active", true)
     .maybeSingle();
@@ -138,16 +138,27 @@ async function applyAuthUserSession(user, { showError = false } = {}) {
     if (showError) showToast("Login found, but no role is assigned in Supabase.");
     return false;
   }
-  const linkedId = roleRecord.role === "participant" ? roleRecord.linked_participant_id : roleRecord.role === "teacher" ? roleRecord.linked_teacher_id : user.id;
+  const { data: role, error: roleError } = await supabaseClient
+    .from("roles")
+    .select("id, name, can_manage_masters, can_review_registrations, can_mark_attendance, active")
+    .eq("id", roleRecord.role_id)
+    .eq("active", true)
+    .maybeSingle();
+  if (roleError || !role) {
+    currentSession = publicSession();
+    if (showError) showToast("Login found, but the assigned role is inactive or missing.");
+    return false;
+  }
+  const linkedId = role.id === "participant" ? roleRecord.linked_participant_id : role.id === "teacher" ? roleRecord.linked_teacher_id : user.id;
   currentSession = {
-    role: roleRecord.role,
+    role: role.id,
     id: linkedId || user.id,
     userId: user.id,
-    name: roleRecord.display_name || user.email || "User",
+    name: roleRecord.display_name || user.email || role.name || "User",
     permissions: {
-      canManageMasters: Boolean(roleRecord.can_manage_masters),
-      canReviewRegistrations: Boolean(roleRecord.can_review_registrations),
-      canMarkAttendance: Boolean(roleRecord.can_mark_attendance)
+      canManageMasters: Boolean(role.can_manage_masters),
+      canReviewRegistrations: Boolean(role.can_review_registrations),
+      canMarkAttendance: Boolean(role.can_mark_attendance)
     }
   };
   return true;
@@ -782,10 +793,14 @@ function participantPhoto(participant) {
 }
 
 function allowedViews() {
-  return roleViews[currentSession.role] || roleViews.public;
+  if (roleViews[currentSession.role]) return roleViews[currentSession.role];
+  if (currentSession.permissions?.canManageMasters) return roleViews.admin;
+  if (currentSession.permissions?.canMarkAttendance) return roleViews.teacher;
+  return roleViews.participant;
 }
 
 function defaultViewForRole(role = currentSession.role) {
+  if (role === currentSession.role) return allowedViews()[0] || "portal";
   return (roleViews[role] || roleViews.public)[0] || "portal";
 }
 

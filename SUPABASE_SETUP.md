@@ -34,15 +34,22 @@ Refresh the app. The sidebar should show `Supabase connected` or `Supabase synce
 
 ## 3. Users And Roles
 
-Login is controlled by Supabase Authentication. Roles and app permissions are controlled by `public.user_roles`.
+Login is controlled by Supabase Authentication. Role definitions and app permissions are controlled by `public.roles`. Each user is linked to one role through `public.user_roles.role_id`.
 
 - Login with the email and password created in **Supabase Authentication > Users**.
-- Add one role row in `public.user_roles` for each Auth user.
+- Add one row in `public.user_roles` for each Auth user.
+- Choose the user's role from `public.roles.id`.
 
 For the admin user, run [supabase/auth_user_roles.sql](supabase/auth_user_roles.sql) after replacing the email placeholder.
-If `public.user_roles.role` already exists as a text field, run [supabase/convert_user_role_to_enum.sql](supabase/convert_user_role_to_enum.sql) once so Supabase Table Editor treats the role as a controlled enum value.
+If your existing Supabase project already has `public.user_roles.role`, run [supabase/migrate_user_roles_to_role_master.sql](supabase/migrate_user_roles_to_role_master.sql) once. It creates the Roles Master, copies existing role values to `role_id`, and removes the old role/permission columns from `public.user_roles`.
 
-Permissions are controlled by:
+Default roles are:
+
+- `admin`
+- `teacher`
+- `participant`
+
+To add more roles later, insert a new row in `public.roles` and set:
 
 - `can_manage_masters`
 - `can_review_registrations`

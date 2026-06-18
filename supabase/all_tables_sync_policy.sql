@@ -9,6 +9,7 @@ alter table public.batches enable row level security;
 alter table public.participants enable row level security;
 alter table public.registrations enable row level security;
 alter table public.hall_bookings enable row level security;
+alter table public.roles enable row level security;
 alter table public.user_roles enable row level security;
 
 drop policy if exists "temporary_demo_read_course_masters" on public.course_masters;
@@ -31,6 +32,7 @@ drop policy if exists "temporary_demo_read_registrations" on public.registration
 drop policy if exists "temporary_demo_write_registrations" on public.registrations;
 drop policy if exists "temporary_demo_read_hall_bookings" on public.hall_bookings;
 drop policy if exists "temporary_demo_write_hall_bookings" on public.hall_bookings;
+drop policy if exists "roles_read_active" on public.roles;
 drop policy if exists "user_roles_read_own" on public.user_roles;
 
 create policy "temporary_demo_read_course_masters" on public.course_masters for select using (true);
@@ -62,5 +64,7 @@ create policy "temporary_demo_write_registrations" on public.registrations for a
 
 create policy "temporary_demo_read_hall_bookings" on public.hall_bookings for select using (true);
 create policy "temporary_demo_write_hall_bookings" on public.hall_bookings for all using (true) with check (true);
+
+create policy "roles_read_active" on public.roles for select using (active = true);
 
 create policy "user_roles_read_own" on public.user_roles for select using (auth.uid() = user_id);
