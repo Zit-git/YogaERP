@@ -40,6 +40,7 @@ Login is controlled by Supabase Authentication. Roles and app permissions are co
 - Add one role row in `public.user_roles` for each Auth user.
 
 For the admin user, run [supabase/auth_user_roles.sql](supabase/auth_user_roles.sql) after replacing the email placeholder.
+If `public.user_roles.role` already exists as a text field, run [supabase/convert_user_role_to_enum.sql](supabase/convert_user_role_to_enum.sql) once so Supabase Table Editor treats the role as a controlled enum value.
 
 Permissions are controlled by:
 

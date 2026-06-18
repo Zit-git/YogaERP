@@ -1,6 +1,13 @@
+do $$
+begin
+  if not exists (select 1 from pg_type where typname = 'app_role') then
+    create type public.app_role as enum ('admin', 'teacher', 'participant');
+  end if;
+end $$;
+
 create table if not exists public.user_roles (
   user_id uuid primary key references auth.users(id) on delete cascade,
-  role text not null check (role in ('admin', 'teacher', 'participant')),
+  role public.app_role not null,
   display_name text not null,
   linked_teacher_id text references public.teachers(id) on delete set null,
   linked_participant_id text references public.participants(id) on delete set null,
