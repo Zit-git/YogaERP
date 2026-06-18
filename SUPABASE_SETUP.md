@@ -7,7 +7,8 @@
 3. Open [supabase/schema.sql](supabase/schema.sql).
 4. Run the full SQL script.
 5. Open and run [supabase/all_tables_sync_policy.sql](supabase/all_tables_sync_policy.sql) for the current prototype. Without this step, Supabase will reject browser reads/writes with a row-level security error.
-6. Open and run [supabase/users_and_roles.sql](supabase/users_and_roles.sql) after teachers and participants exist. This creates the admin user and creates teacher/participant login rows from current Supabase records.
+6. Create users in **Supabase Authentication > Users**.
+7. Open [supabase/auth_user_roles.sql](supabase/auth_user_roles.sql), replace `REPLACE_WITH_ADMIN_EMAIL` with your admin Auth user email, then run it.
 
 The app now reads/writes only Supabase records. Browser-local record storage is disabled.
 
@@ -33,14 +34,12 @@ Refresh the app. The sidebar should show `Supabase connected` or `Supabase synce
 
 ## 3. Users And Roles
 
-Login is controlled by the `public.users` table.
+Login is controlled by Supabase Authentication. Roles and app permissions are controlled by `public.user_roles`.
 
-- Admin username: `admin`, default password: `admin123`
-- Teacher username: teacher email, default password: `changeme`
-- Participant username: participant phone number, default password: `changeme`
+- Login with the email and password created in **Supabase Authentication > Users**.
+- Add one role row in `public.user_roles` for each Auth user.
 
-Change the `password` value in `public.users` after the generated rows are created.
-If the `users` table already exists, rerun [supabase/users_and_roles.sql](supabase/users_and_roles.sql) once to add the `password` column and default passwords.
+For the admin user, run [supabase/auth_user_roles.sql](supabase/auth_user_roles.sql) after replacing the email placeholder.
 
 Permissions are controlled by:
 

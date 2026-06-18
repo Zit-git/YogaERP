@@ -15,8 +15,6 @@ let currentSession = loadSession();
 const supabaseClient = createSupabaseClient();
 let hasLoadedRemoteData = false;
 let isHydratingRemoteData = false;
-let appUsers = [];
-let usersLoadError = "";
 let remoteSaveTimer = null;
 let remoteStatus = supabaseClient ? "Supabase connecting" : "Supabase not configured";
 let currentFilter = "all";
@@ -78,8 +76,7 @@ async function loadRemoteData() {
   try {
     remoteStatus = "Loading Supabase data";
     renderAuthState();
-    await loadSupabaseUsers();
-    refreshCurrentSessionFromUsers();
+    await refreshAuthSession();
     renderNav();
     const { data, error } = await supabaseClient
       .from("app_state")
@@ -119,49 +116,41 @@ async function loadRemoteData() {
   }
 }
 
-async function loadSupabaseUsers({ showError = false } = {}) {
+async function refreshAuthSession() {
   if (!supabaseClient) return;
-  const { data, error } = await supabaseClient
-    .from("users")
-    .select("id, login_id, password, role, display_name, linked_teacher_id, linked_participant_id, can_manage_masters, can_review_registrations, can_mark_attendance, active")
-    .eq("active", true)
-    .order("display_name");
-  if (error) {
-    appUsers = [];
-    usersLoadError = "Run supabase/users_and_roles.sql to enable login users.";
-    if (showError) showToast(usersLoadError);
-    return;
-  }
-  usersLoadError = "";
-  appUsers = data || [];
-}
-
-function refreshCurrentSessionFromUsers() {
-  if (currentSession.role === "public") return;
-  const user = appUsers.find((item) => {
-    if (currentSession.userId && item.id === currentSession.userId) return true;
-    if (item.role !== currentSession.role) return false;
-    if (item.role === "admin") return item.login_id === currentSession.id || currentSession.id === "admin";
-    if (item.role === "teacher") return item.linked_teacher_id === currentSession.id;
-    if (item.role === "participant") return item.linked_participant_id === currentSession.id;
-    return false;
-  });
-  if (!user) {
+  const { data, error } = await supabaseClient.auth.getSession();
+  if (error || !data.session?.user) {
     currentSession = publicSession();
     return;
   }
-  const linkedId = user.role === "participant" ? user.linked_participant_id : user.role === "teacher" ? user.linked_teacher_id : user.id;
+  await applyAuthUserSession(data.session.user);
+}
+
+async function applyAuthUserSession(user, { showError = false } = {}) {
+  const { data: roleRecord, error } = await supabaseClient
+    .from("user_roles")
+    .select("role, display_name, linked_teacher_id, linked_participant_id, can_manage_masters, can_review_registrations, can_mark_attendance, active")
+    .eq("user_id", user.id)
+    .eq("active", true)
+    .maybeSingle();
+  if (error || !roleRecord) {
+    currentSession = publicSession();
+    if (showError) showToast("Login found, but no role is assigned in Supabase.");
+    return false;
+  }
+  const linkedId = roleRecord.role === "participant" ? roleRecord.linked_participant_id : roleRecord.role === "teacher" ? roleRecord.linked_teacher_id : user.id;
   currentSession = {
-    role: user.role,
+    role: roleRecord.role,
     id: linkedId || user.id,
     userId: user.id,
-    name: user.display_name || user.login_id,
+    name: roleRecord.display_name || user.email || "User",
     permissions: {
-      canManageMasters: Boolean(user.can_manage_masters),
-      canReviewRegistrations: Boolean(user.can_review_registrations),
-      canMarkAttendance: Boolean(user.can_mark_attendance)
+      canManageMasters: Boolean(roleRecord.can_manage_masters),
+      canReviewRegistrations: Boolean(roleRecord.can_review_registrations),
+      canMarkAttendance: Boolean(roleRecord.can_mark_attendance)
     }
   };
+  return true;
 }
 
 async function fetchSupabaseRows(tableName) {
@@ -838,70 +827,52 @@ function visibleRegistrationRows() {
   return allRegistrationRows();
 }
 
-function findLoginRecord(identifier, password) {
-  const value = identifier.trim().toLowerCase();
-  return appUsers.find((user) => {
-    const loginMatches = String(user.login_id || "").toLowerCase() === value;
-    const passwordMatches = String(user.password || "") === String(password || "");
-    return loginMatches && passwordMatches;
-  }) || null;
-}
-
 async function login(identifier, password) {
   if (!supabaseClient) {
-    showToast("Supabase is not configured. Login requires Supabase users.");
+    showToast("Supabase is not configured. Login requires Supabase Auth.");
     return;
   }
   if (!hasLoadedRemoteData) {
     showToast("Supabase data is still loading. Please try again in a moment.");
     return;
   }
-  await loadSupabaseUsers({ showError: true });
-  if (usersLoadError) return;
-  const record = findLoginRecord(identifier, password);
-  if (!record) {
+  const { data, error } = await supabaseClient.auth.signInWithPassword({
+    email: identifier.trim(),
+    password
+  });
+  if (error || !data.user) {
     showToast("Invalid username or password.");
     return;
   }
-  const role = record.role;
-  const linkedId = role === "participant" ? record.linked_participant_id : role === "teacher" ? record.linked_teacher_id : record.id;
-  currentSession = {
-    role,
-    id: linkedId || record.id,
-    userId: record.id,
-    name: record.display_name || record.login_id,
-    permissions: {
-      canManageMasters: Boolean(record.can_manage_masters),
-      canReviewRegistrations: Boolean(record.can_review_registrations),
-      canMarkAttendance: Boolean(record.can_mark_attendance)
-    }
-  };
-  selectedParticipantId = role === "participant" ? currentSession.id : selectedParticipantId;
-  selectedTeacherId = role === "teacher" ? currentSession.id : selectedTeacherId;
+  const hasRole = await applyAuthUserSession(data.user, { showError: true });
+  if (!hasRole) {
+    await supabaseClient.auth.signOut();
+    return;
+  }
+  selectedParticipantId = currentSession.role === "participant" ? currentSession.id : selectedParticipantId;
+  selectedTeacherId = currentSession.role === "teacher" ? currentSession.id : selectedTeacherId;
   linkBackStack = [];
   renderNav();
   renderAll();
-  activateView(defaultViewForRole(role));
+  activateView(defaultViewForRole(currentSession.role));
   showToast(`Logged in as ${currentSession.name}.`);
 }
 
 async function requestPasswordReset(identifier) {
   if (!supabaseClient) {
-    showToast("Password reset requires Supabase users.");
+    showToast("Password reset requires Supabase Auth.");
     return;
   }
-  await loadSupabaseUsers({ showError: true });
-  if (usersLoadError) return;
-  const value = identifier.trim().toLowerCase();
-  const user = appUsers.find((item) => String(item.login_id || "").toLowerCase() === value);
-  if (!user) {
-    showToast("Username not found.");
+  const { error } = await supabaseClient.auth.resetPasswordForEmail(identifier.trim());
+  if (error) {
+    showToast(error.message || "Unable to send password reset.");
     return;
   }
-  showToast("Please contact the administrator to reset your password.");
+  showToast("Password reset email sent.");
 }
 
-function logout() {
+async function logout() {
+  if (supabaseClient) await supabaseClient.auth.signOut();
   currentSession = publicSession();
   linkBackStack = [];
   renderNav();
@@ -2284,10 +2255,10 @@ function bindEvents() {
     await requestPasswordReset(form.get("identifier"));
     event.currentTarget.reset();
   });
-  document.body.addEventListener("click", (event) => {
+  document.body.addEventListener("click", async (event) => {
     const logoutButton = event.target.closest("#logoutButton");
     if (logoutButton) {
-      logout();
+      await logout();
       return;
     }
     const publicRegister = event.target.closest("[data-public-register]");
