@@ -28,6 +28,10 @@ body {
   grid-template-columns: 292px 1fr;
 }
 
+body.public-portal {
+  grid-template-columns: 1fr;
+}
+
 button, input, select, textarea { font: inherit; }
 button { cursor: pointer; }
 
@@ -118,6 +122,15 @@ nav button.is-active {
 .app-shell {
   min-width: 0;
   padding: 22px 24px 28px;
+}
+
+body.public-portal .sidebar {
+  display: none;
+}
+
+body.public-portal .app-shell {
+  width: min(1280px, 100%);
+  margin: 0 auto;
 }
 
 .topbar {

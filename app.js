@@ -41,7 +41,7 @@ const views = [
 ];
 
 const roleViews = {
-  public: ["portal"],
+  public: [],
   participant: ["courses", "participants"],
   teacher: ["dashboard", "courses", "teachers", "participants"],
   admin: views.filter(([id]) => id !== "portal").map(([id]) => id)
@@ -1033,6 +1033,7 @@ function backLinkHtml() {
 }
 
 function renderAuthState() {
+  document.body.classList.toggle("public-portal", currentSession.role === "public");
   const card = $("#authCard");
   if (!card) return;
   const roleLabel = currentSession.role[0].toUpperCase() + currentSession.role.slice(1);
