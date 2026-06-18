@@ -1083,7 +1083,7 @@ function renderPortal() {
     return `<tr>
       <td><strong>${course.name}</strong><br><span class="muted">${course.eligibility}</span><br><span class="pill ${statusClass(course.status || programLifecycleStatus(course))}">${course.status || programLifecycleStatus(course)}</span></td>
       <td>${course.start}<br><span class="muted">${course.end}</span></td>
-      <td><button class="secondary-button" type="button" data-public-register="${course.id}">Register</button></td>
+      <td><button class="secondary-button" type="button" data-public-register="${course.id}">Register as Guest</button></td>
     </tr>`;
   }).join("");
   $("#portalBatchRows").innerHTML = rows || `<tr><td colspan="3"><span class="muted">No upcoming programs are open for registration.</span></td></tr>`;
@@ -1112,13 +1112,13 @@ function renderPermissionChrome() {
     const element = $(selector);
     if (element) element.hidden = !canManageMasters();
   });
-  const registrationButtons = ["#openRegistration", "#portalRegistration", "#addParticipantFromMaster"];
+  const registrationButtons = ["#openRegistration", "#addParticipantFromMaster"];
   registrationButtons.forEach((selector) => {
     const element = $(selector);
     if (element) element.hidden = currentSession.role === "participant";
   });
-  const globalSearch = $(".search-box");
-  if (globalSearch) globalSearch.hidden = currentSession.role === "public";
+  const topActions = $(".top-actions");
+  if (topActions) topActions.hidden = currentSession.role === "public";
 }
 
 function renderMetrics() {
@@ -2184,13 +2184,6 @@ function deleteProgram(programId) {
 
 function bindEvents() {
   $("#openRegistration").addEventListener("click", () => $("#registrationDialog").showModal());
-  $("#portalRegistration").addEventListener("click", () => {
-    if (!state.courses.some(isPortalProgram)) {
-      showToast("No upcoming programs are open for registration.");
-      return;
-    }
-    $("#registrationDialog").showModal();
-  });
   $("#addCourse").addEventListener("click", () => canManageMasters() && $("#courseDialog").showModal());
   $("#addProgram").addEventListener("click", () => canManageMasters() && openProgramDialog());
   $("#addTeacherFromView").addEventListener("click", () => canManageMasters() && openTeacherDialog());
