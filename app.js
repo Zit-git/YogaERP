@@ -1265,7 +1265,7 @@ function addBulkRegistrantRow(values = {}) {
           </select>
         </label>
         <label>Phone<input data-bulk-field="phone" value="${values.phone || ""}" required></label>
-        <label>Email<input data-bulk-field="email" type="email" value="${values.email || ""}" required></label>
+        <label>Email ID<input data-bulk-field="email" type="email" value="${values.email || ""}" required></label>
         <label>Emergency Contact<input data-bulk-field="emergencyContact" value="${values.emergencyContact || ""}"></label>
         <label class="wide">Address<textarea data-bulk-field="address" rows="2">${values.address || ""}</textarea></label>
         <label class="wide">Health Notes<textarea data-bulk-field="notes" rows="2">${values.notes || ""}</textarea></label>
@@ -3257,6 +3257,7 @@ function deleteProgram(programId) {
 function bindEvents() {
   $("#addCourse").addEventListener("click", () => canManageMasters() && $("#courseDialog").showModal());
   $("#addProgram").addEventListener("click", () => canManageMasters() && openProgramDialog());
+  $("#addRegistration").addEventListener("click", () => openRegistrationDialog());
   $("#addParticipantFromMaster").addEventListener("click", () => {
     openRegistrationDialog();
   });
