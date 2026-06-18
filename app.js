@@ -10,8 +10,8 @@ const emptyState = () => ({
   participants: []
 });
 
-const state = loadData();
-let currentSession = loadSession();
+const state = emptyState();
+let currentSession = publicSession();
 const supabaseClient = createSupabaseClient();
 let accessRoles = [];
 let accessUsers = [];
@@ -58,16 +58,17 @@ const $$ = (selector) => Array.from(document.querySelectorAll(selector));
 
 migrateState();
 
-function loadData() {
-  localStorage.removeItem("aliyar-management-data");
-  return emptyState();
-}
-
 function createSupabaseClient() {
   const config = window.ALIYAR_SUPABASE || {};
   const hasConfig = config.url && config.anonKey;
   if (!hasConfig || !window.supabase?.createClient) return null;
-  return window.supabase.createClient(config.url, config.anonKey);
+  return window.supabase.createClient(config.url, config.anonKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false
+    }
+  });
 }
 
 function createSupabaseSignupClient() {
@@ -93,27 +94,12 @@ async function loadRemoteData() {
     renderAuthState();
     await refreshAuthSession();
     renderNav();
-    const { data, error } = await supabaseClient
-      .from("app_state")
-      .select("payload")
-      .eq("id", "current")
-      .maybeSingle();
-    if (error) throw error;
-    let lifecycleChanged = false;
-    if (data?.payload) {
-      Object.keys(state).forEach((key) => delete state[key]);
-      Object.assign(state, data.payload);
-      migrateState();
-      lifecycleChanged = applyProgramLifecycleStatuses();
-      remoteStatus = "Supabase connected";
-    } else {
-      const relationalState = await loadRelationalData();
-      Object.keys(state).forEach((key) => delete state[key]);
-      Object.assign(state, relationalState);
-      migrateState();
-      lifecycleChanged = applyProgramLifecycleStatuses();
-      remoteStatus = hasAnyRecords(state) ? "Supabase connected" : "Supabase connected - no records yet";
-    }
+    const relationalState = await loadRelationalData();
+    Object.keys(state).forEach((key) => delete state[key]);
+    Object.assign(state, relationalState);
+    migrateState();
+    const lifecycleChanged = applyProgramLifecycleStatuses();
+    remoteStatus = hasAnyRecords(state) ? "Supabase connected" : "Supabase connected - no records yet";
     hasLoadedRemoteData = true;
     await loadAccessManagementData();
     calendarDate = getInitialCalendarDate();
@@ -352,14 +338,6 @@ function scheduleRemoteSave() {
 async function persistRemoteData() {
   if (!supabaseClient || !hasLoadedRemoteData) return;
   try {
-    const { error } = await supabaseClient
-      .from("app_state")
-      .upsert({
-        id: "current",
-        payload: state,
-        updated_at: new Date().toISOString()
-      });
-    if (error) throw error;
     await syncRelationalTables();
     remoteStatus = "Supabase synced";
     renderAuthState();
@@ -514,21 +492,6 @@ async function syncRelationalTables() {
   await replaceSupabaseTable("participants", participantRows);
   await replaceSupabaseTable("registrations", registrationRows);
   await replaceSupabaseTable("hall_bookings", hallBookingRows);
-}
-
-function loadSession() {
-  const stored = localStorage.getItem("aliyar-session");
-  if (!stored) return publicSession();
-  const parsed = JSON.parse(stored);
-  return {
-    ...publicSession(),
-    ...parsed,
-    permissions: { ...publicSession().permissions, ...(parsed.permissions || {}) }
-  };
-}
-
-function saveSession() {
-  localStorage.setItem("aliyar-session", JSON.stringify(currentSession));
 }
 
 function publicSession() {
@@ -1853,7 +1816,6 @@ function renderProgramParentOptions(currentId = "") {
 function renderAll() {
   applyProgramLifecycleStatuses();
   saveData();
-  saveSession();
   renderAuthState();
   renderPortal();
   renderPermissionChrome();

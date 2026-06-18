@@ -1,4 +1,3 @@
-alter table public.app_state enable row level security;
 alter table public.course_masters enable row level security;
 alter table public.teachers enable row level security;
 alter table public.program_halls enable row level security;

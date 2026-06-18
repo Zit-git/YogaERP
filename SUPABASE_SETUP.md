@@ -10,7 +10,8 @@
 6. Create users in **Supabase Authentication > Users**.
 7. Open [supabase/auth_user_roles.sql](supabase/auth_user_roles.sql), replace `REPLACE_WITH_ADMIN_EMAIL` with your admin Auth user email, then run it.
 
-The app now reads/writes only Supabase records. Browser-local record storage is disabled.
+The app now reads/writes only normalized Supabase tables. Browser-local record storage and the old `app_state` JSON snapshot are disabled.
+For an existing project, run [supabase/drop_app_state_snapshot.sql](supabase/drop_app_state_snapshot.sql) once to remove the old snapshot table.
 
 ## 2. Add Project Credentials
 

@@ -1,11 +1,5 @@
 create extension if not exists pgcrypto;
 
-create table if not exists public.app_state (
-  id text primary key default 'current',
-  payload jsonb not null,
-  updated_at timestamptz not null default now()
-);
-
 create table if not exists public.course_masters (
   id text primary key,
   parent_id text references public.course_masters(id) on delete restrict,
@@ -183,7 +177,6 @@ create table if not exists public.user_roles (
 alter table public.user_roles
   add column if not exists login_email text;
 
-alter table public.app_state enable row level security;
 alter table public.course_masters enable row level security;
 alter table public.teachers enable row level security;
 alter table public.program_halls enable row level security;
@@ -196,15 +189,6 @@ alter table public.registrations enable row level security;
 alter table public.hall_bookings enable row level security;
 alter table public.roles enable row level security;
 alter table public.user_roles enable row level security;
-
-create policy "temporary_demo_read_app_state"
-  on public.app_state for select
-  using (true);
-
-create policy "temporary_demo_write_app_state"
-  on public.app_state for all
-  using (true)
-  with check (true);
 
 drop policy if exists "user_roles_read_own" on public.user_roles;
 drop policy if exists "roles_read_active" on public.roles;
