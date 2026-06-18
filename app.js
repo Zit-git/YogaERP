@@ -1770,7 +1770,7 @@ function renderProgramDetail() {
         <p class="muted">${program.code} | ${program.level}${program.duration ? ` | ${program.duration}` : ""}</p>
       </div>
       <div class="row-actions">
-        ${canManageMasters() ? `<button class="primary-button" type="button" data-program-session-add="${program.id}">Add Session</button><button class="secondary-button" type="button" data-program-edit="${program.id}">Edit Course</button>` : ""}
+        ${canManageMasters() ? `<button class="secondary-button" type="button" data-program-edit="${program.id}">Edit Course</button>` : ""}
       </div>
     </div>
     <div class="course-meta detail-meta">
@@ -1789,8 +1789,11 @@ function renderProgramDetail() {
     </section>
     <section class="participant-subform">
       <div class="subform-header">
-        <h3>Course Session Plan</h3>
-        <span class="muted">Applied to programs scheduled from this course</span>
+        <div>
+          <h3>Course Session Plan</h3>
+          <span class="muted">Applied to programs scheduled from this course</span>
+        </div>
+        ${canManageMasters() ? `<button class="primary-button" type="button" data-program-session-add="${program.id}">Add Session</button>` : ""}
       </div>
       <div class="table-wrap subform-table">
         <table>

@@ -928,12 +928,14 @@ textarea { resize: vertical; }
 
 .participant-master-row,
 .teacher-master-row,
+.program-master-row,
 .batch-master-row {
   cursor: pointer;
 }
 
 .participant-master-row:focus,
 .teacher-master-row:focus,
+.program-master-row:focus,
 .batch-master-row:focus {
   outline: 2px solid rgba(15, 118, 110, 0.28);
   outline-offset: -2px;
