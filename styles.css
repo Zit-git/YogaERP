@@ -291,17 +291,6 @@ textarea { resize: vertical; }
   align-items: start;
 }
 
-.portal-controls {
-  display: grid;
-  grid-template-columns: minmax(220px, 1fr) minmax(180px, 240px);
-  gap: 12px;
-  margin: 12px 0;
-}
-
-.portal-controls .search-box {
-  width: 100%;
-}
-
 .login-panel {
   position: sticky;
   top: 22px;
@@ -993,6 +982,64 @@ th {
   letter-spacing: 0;
 }
 
+.table-header-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.table-icon-button {
+  width: 26px;
+  height: 26px;
+  min-height: 26px;
+  border-radius: 6px;
+  font-size: 11px;
+  line-height: 1;
+}
+
+.table-icon-button svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.portal-filter-row th {
+  background: #fff;
+  padding: 10px 12px;
+}
+
+.table-filter-input {
+  display: grid;
+  gap: 6px;
+  max-width: 520px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.table-filter-input input {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 9px 10px;
+  color: var(--ink);
+  background: #fff;
+}
+
+.pagination-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
 tr:hover td { background: #fbfcfe; }
 tr:last-child td { border-bottom: 0; }
 
@@ -1199,7 +1246,6 @@ menu {
   .app-shell { padding: 16px; }
   .topbar, .top-actions, .section-toolbar, .panel-header { display: grid; }
   .search-box { width: 100%; }
-  .portal-controls { grid-template-columns: 1fr; }
   nav, .metric-grid, .status-strip, .card-grid, .room-grid, .kanban, .teacher-grid, .form-grid, .workflow-row { grid-template-columns: 1fr; }
   .profile-card { grid-template-columns: 1fr; }
   .profile-photo { width: 132px; }

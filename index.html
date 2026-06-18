@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Aliyar Program Management</title>
     <link rel="icon" href="favicon.svg" type="image/svg+xml">
-    <link rel="stylesheet" href="styles.css?v=45">
+    <link rel="stylesheet" href="styles.css?v=46">
   </head>
   <body>
     <aside class="sidebar" aria-label="Primary navigation">
@@ -43,32 +43,44 @@
               </div>
               <button class="primary-button" id="portalRegistration" type="button">Register Without Login</button>
             </div>
-            <div class="portal-controls">
-              <label class="search-box portal-filter">
-                <span>Filter</span>
-                <input id="portalProgramFilter" type="search" placeholder="Program name or eligibility">
-              </label>
-              <label class="search-box portal-sort">
-                <span>Sort</span>
-                <select id="portalProgramSort">
-                  <option value="startAsc">Start date</option>
-                  <option value="startDesc">Latest first</option>
-                  <option value="nameAsc">Program name</option>
-                </select>
-              </label>
-            </div>
             <div class="table-wrap flat-table">
               <table>
                 <thead>
                   <tr>
-                    <th>Program</th>
-                    <th>Dates</th>
+                    <th>
+                      <span class="table-header-control">
+                        Program
+                        <button class="icon-button table-icon-button" id="portalFilterToggle" type="button" title="Filter programs" aria-label="Filter programs">
+                          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16l-6 7v5l-4 2v-7z"></path></svg>
+                        </button>
+                        <button class="icon-button table-icon-button" id="portalSortName" type="button" title="Sort by program name" aria-label="Sort by program name">
+                          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 6h10M7 12h7M7 18h4"></path></svg>
+                        </button>
+                      </span>
+                    </th>
+                    <th>
+                      <span class="table-header-control">
+                        Dates
+                        <button class="icon-button table-icon-button" id="portalSortDate" type="button" title="Sort by date" aria-label="Sort by date">
+                          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 7h8M8 12h6M8 17h4M17 5v14m0 0 3-3m-3 3-3-3"></path></svg>
+                        </button>
+                      </span>
+                    </th>
                     <th>Action</th>
+                  </tr>
+                  <tr class="portal-filter-row" id="portalFilterRow" hidden>
+                    <th colspan="3">
+                      <label class="table-filter-input">
+                        <span>Filter</span>
+                        <input id="portalProgramFilter" type="search" placeholder="Program name, eligibility, or date">
+                      </label>
+                    </th>
                   </tr>
                 </thead>
                 <tbody id="portalBatchRows"></tbody>
               </table>
             </div>
+            <div class="pagination-bar" id="portalPagination"></div>
           </section>
           <section class="panel login-panel">
             <div class="panel-header">
@@ -479,6 +491,6 @@
     <div id="toast" role="status" aria-live="polite"></div>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="supabase-config.js?v=35"></script>
-    <script src="app.js?v=45"></script>
+    <script src="app.js?v=46"></script>
   </body>
 </html>

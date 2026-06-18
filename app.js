@@ -22,6 +22,8 @@ let remoteStatus = supabaseClient ? "Supabase connecting" : "Supabase not config
 let currentFilter = "all";
 let portalProgramFilter = "";
 let portalProgramSort = "startAsc";
+let portalProgramPage = 1;
+const portalProgramPageSize = 5;
 let calendarDate = getInitialCalendarDate();
 let selectedCourseId = "";
 let selectedParticipantId = "";
@@ -1074,7 +1076,10 @@ function renderPortal() {
       if (portalProgramSort === "nameAsc") return a.name.localeCompare(b.name);
       return dateFromInput(a.start) - dateFromInput(b.start);
     });
-  const rows = upcomingPrograms.map((course) => {
+  const pageCount = Math.max(1, Math.ceil(upcomingPrograms.length / portalProgramPageSize));
+  portalProgramPage = Math.min(Math.max(1, portalProgramPage), pageCount);
+  const visiblePrograms = upcomingPrograms.slice((portalProgramPage - 1) * portalProgramPageSize, portalProgramPage * portalProgramPageSize);
+  const rows = visiblePrograms.map((course) => {
     return `<tr>
       <td><strong>${course.name}</strong><br><span class="muted">${course.eligibility}</span><br><span class="pill ${statusClass(course.status || programLifecycleStatus(course))}">${course.status || programLifecycleStatus(course)}</span></td>
       <td>${course.start}<br><span class="muted">${course.end}</span></td>
@@ -1082,6 +1087,14 @@ function renderPortal() {
     </tr>`;
   }).join("");
   $("#portalBatchRows").innerHTML = rows || `<tr><td colspan="3"><span class="muted">No upcoming programs are open for registration.</span></td></tr>`;
+  $("#portalPagination").innerHTML = upcomingPrograms.length ? `
+    <span>${(portalProgramPage - 1) * portalProgramPageSize + 1}-${Math.min(portalProgramPage * portalProgramPageSize, upcomingPrograms.length)} of ${upcomingPrograms.length}</span>
+    <div class="row-actions">
+      <button class="secondary-button" type="button" data-portal-page="previous" ${portalProgramPage === 1 ? "disabled" : ""}>Previous</button>
+      <strong>Page ${portalProgramPage} / ${pageCount}</strong>
+      <button class="secondary-button" type="button" data-portal-page="next" ${portalProgramPage === pageCount ? "disabled" : ""}>Next</button>
+    </div>
+  ` : "";
 }
 
 function renderPermissionChrome() {
@@ -2205,12 +2218,30 @@ function bindEvents() {
   $("#addHallBooking").addEventListener("click", () => canManageMasters() && addOrEditHallBooking());
   $("#generateCertificates").addEventListener("click", () => canManageMasters() && generateCertificates());
   $("#globalSearch").addEventListener("input", renderRegistrations);
-  $("#portalProgramFilter").addEventListener("input", (event) => {
-    portalProgramFilter = event.currentTarget.value;
+  $("#portalFilterToggle").addEventListener("click", () => {
+    const row = $("#portalFilterRow");
+    row.hidden = !row.hidden;
+    if (!row.hidden) $("#portalProgramFilter").focus();
+  });
+  $("#portalSortName").addEventListener("click", () => {
+    portalProgramSort = "nameAsc";
+    portalProgramPage = 1;
     renderPortal();
   });
-  $("#portalProgramSort").addEventListener("change", (event) => {
-    portalProgramSort = event.currentTarget.value;
+  $("#portalSortDate").addEventListener("click", () => {
+    portalProgramSort = portalProgramSort === "startAsc" ? "startDesc" : "startAsc";
+    portalProgramPage = 1;
+    renderPortal();
+  });
+  $("#portalProgramFilter").addEventListener("input", (event) => {
+    portalProgramFilter = event.currentTarget.value;
+    portalProgramPage = 1;
+    renderPortal();
+  });
+  $("#portalPagination").addEventListener("click", (event) => {
+    const button = event.target.closest("[data-portal-page]");
+    if (!button) return;
+    portalProgramPage += button.dataset.portalPage === "next" ? 1 : -1;
     renderPortal();
   });
   $("#registrationFilter").addEventListener("click", (event) => {
