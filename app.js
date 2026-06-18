@@ -1003,7 +1003,7 @@ function showToast(message) {
 }
 
 function tableConfig(key) {
-  tableState[key] ||= { filters: {}, sort: "", direction: "asc", page: 1 };
+  tableState[key] ||= { filters: {}, sort: "", direction: "asc", page: 1, filterOpen: "" };
   return tableState[key];
 }
 
@@ -1228,21 +1228,32 @@ function tableHeaderCell(tableKey, column, stateForTable) {
   const filterValue = stateForTable.filters[column.key] || "";
   const isSorted = stateForTable.sort === column.key;
   const direction = isSorted ? stateForTable.direction : "";
+  const isFilterOpen = stateForTable.filterOpen === column.key;
+  const hasFilter = Boolean(filterValue.trim());
+  const sortIcon = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 3-3 3 3"></path><path d="M10 4v16"></path><path d="m17 17-3 3-3-3"></path><path d="M14 20V4"></path></svg>`;
+  const filterIcon = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18"></path><path d="M7 12h10"></path><path d="M10 19h4"></path></svg>`;
   const filter = column.filter === false ? "" : `
-    <input class="column-filter" type="search" data-column-filter="${tableKey}" data-column-key="${column.key}" value="${filterValue}" placeholder="Filter">
+    <button class="column-action-button ${isFilterOpen || hasFilter ? "is-active" : ""} ${hasFilter ? "has-filter" : ""}" type="button" data-column-filter-toggle="${tableKey}" data-column-key="${column.key}" title="Filter ${column.label}" aria-label="Filter ${column.label}">
+      ${filterIcon}
+    </button>
+  `;
+  const filterControl = column.filter === false || !isFilterOpen ? "" : `
+    <div class="column-filter-row">
+      <input class="column-filter" type="search" data-column-filter="${tableKey}" data-column-key="${column.key}" value="${filterValue}" placeholder="Filter ${column.label}">
+    </div>
   `;
   const sort = column.sort === false ? "" : `
-    <span class="column-sort">
-      <button class="table-icon-button ${isSorted && direction === "asc" ? "is-active" : ""}" type="button" data-column-sort="${tableKey}" data-column-key="${column.key}" data-sort-direction="asc" title="Sort ascending" aria-label="Sort ${column.label} ascending">↑</button>
-      <button class="table-icon-button ${isSorted && direction === "desc" ? "is-active" : ""}" type="button" data-column-sort="${tableKey}" data-column-key="${column.key}" data-sort-direction="desc" title="Sort descending" aria-label="Sort ${column.label} descending">↓</button>
-    </span>
+    <button class="column-action-button ${isSorted ? "is-active" : ""}" type="button" data-column-sort="${tableKey}" data-column-key="${column.key}" title="Sort ${column.label}" aria-label="Sort ${column.label}">
+      ${sortIcon}
+      ${isSorted ? `<span class="sort-direction">${direction === "desc" ? "DESC" : "ASC"}</span>` : ""}
+    </button>
   `;
   return `<th>
     <div class="column-header">
       <span>${column.label}</span>
-      ${sort}
+      <span class="column-actions">${sort}${filter}</span>
     </div>
-    ${filter}
+    ${filterControl}
   </th>`;
 }
 
@@ -3028,10 +3039,31 @@ function bindEvents() {
   });
   document.body.addEventListener("click", (event) => {
     const sort = event.target.closest("[data-column-sort]");
-    if (!sort) return;
+    const filterToggle = event.target.closest("[data-column-filter-toggle]");
+    if (!sort && !filterToggle) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (filterToggle) {
+      const key = filterToggle.dataset.columnFilterToggle;
+      const columnKey = filterToggle.dataset.columnKey;
+      const stateForTable = tableConfig(key);
+      stateForTable.filterOpen = stateForTable.filterOpen === columnKey ? "" : columnKey;
+      renderAll();
+      if (stateForTable.filterOpen === columnKey) {
+        requestAnimationFrame(() => {
+          const nextFilter = document.querySelector(`[data-column-filter="${key}"][data-column-key="${columnKey}"]`);
+          if (nextFilter) nextFilter.focus();
+        });
+      }
+      return;
+    }
     const stateForTable = tableConfig(sort.dataset.columnSort);
-    stateForTable.sort = sort.dataset.columnKey;
-    stateForTable.direction = sort.dataset.sortDirection;
+    if (stateForTable.sort === sort.dataset.columnKey) {
+      stateForTable.direction = stateForTable.direction === "asc" ? "desc" : "asc";
+    } else {
+      stateForTable.sort = sort.dataset.columnKey;
+      stateForTable.direction = "asc";
+    }
     stateForTable.page = 1;
     renderAll();
   });
