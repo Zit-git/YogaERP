@@ -33,6 +33,7 @@ let accommodationTab = "blocks";
 let hallTab = "halls";
 let openDetailView = { courses: false, teachers: false, participants: false };
 const tableState = {};
+const bulkSelections = {};
 const tablePageSize = 8;
 
 const views = [
@@ -1006,6 +1007,204 @@ function tableConfig(key) {
   return tableState[key];
 }
 
+function bulkSet(key) {
+  bulkSelections[key] ||= new Set();
+  return bulkSelections[key];
+}
+
+function bulkConfig(key) {
+  const editable = {
+    courses: "Programs",
+    programs: "Course Master",
+    teachers: "Teachers",
+    registrations: "Registrations",
+    "accommodation-blocks": "Blocks",
+    "accommodation-floors": "Floors",
+    "accommodation-rooms": "Rooms",
+    halls: "Program Halls",
+    "hall-bookings": "Hall Bookings",
+    "access-users": "Users",
+    "access-roles": "Roles"
+  };
+  return editable[key] ? { label: editable[key] } : null;
+}
+
+function renderSelectionCell(key, id) {
+  if (!bulkConfig(key) || !canManageMasters()) return "";
+  return `<td class="select-cell"><input type="checkbox" data-row-select="${key}" value="${id}" ${bulkSet(key).has(id) ? "checked" : ""} aria-label="Select row"></td>`;
+}
+
+function bulkFieldDefinitions(key) {
+  const yesNo = [
+    { value: "true", label: "Yes" },
+    { value: "false", label: "No" }
+  ];
+  const activeInactive = [
+    { value: "true", label: "Active" },
+    { value: "false", label: "Inactive" }
+  ];
+  return {
+    courses: [
+      { name: "status", label: "Status", type: "select", options: ["Upcoming", "Active", "Completed"].map((value) => ({ value, label: value })) },
+      { name: "hallId", label: "Program Hall", type: "select", options: state.halls.map((hall) => ({ value: hall.id, label: hall.name })) },
+      { name: "teacher", label: "Teacher Name", type: "text" },
+      { name: "seats", label: "Seats", type: "number" }
+    ],
+    programs: [
+      { name: "level", label: "Level", type: "text" },
+      { name: "duration", label: "Duration", type: "text" }
+    ],
+    teachers: [
+      { name: "speciality", label: "Speciality", type: "text" }
+    ],
+    registrations: [
+      { name: "status", label: "Status", type: "select", options: ["Pending", "Confirmed", "Waitlist"].map((value) => ({ value, label: value })) },
+      { name: "eligible", label: "Eligibility", type: "select", options: yesNo },
+      { name: "roomId", label: "Room", type: "select", options: [{ value: "", label: "Not assigned" }, ...state.rooms.map((room) => ({ value: room.id, label: room.name }))] }
+    ],
+    "accommodation-blocks": [
+      { name: "gender", label: "Gender", type: "text" }
+    ],
+    "accommodation-floors": [
+      { name: "blockId", label: "Block", type: "select", options: state.blocks.map((block) => ({ value: block.id, label: block.name })) }
+    ],
+    "accommodation-rooms": [
+      { name: "gender", label: "Room Type", type: "text" },
+      { name: "beds", label: "Beds", type: "number" }
+    ],
+    halls: [
+      { name: "location", label: "Location", type: "text" },
+      { name: "capacity", label: "Capacity", type: "number" }
+    ],
+    "hall-bookings": [
+      { name: "hallId", label: "Program Hall", type: "select", options: state.halls.map((hall) => ({ value: hall.id, label: hall.name })) }
+    ],
+    "access-users": [
+      { name: "active", label: "Login Access", type: "select", options: activeInactive }
+    ],
+    "access-roles": [
+      { name: "active", label: "Role Status", type: "select", options: activeInactive }
+    ]
+  }[key] || [];
+}
+
+function openBulkEditDialog(key) {
+  const selected = Array.from(bulkSet(key));
+  if (!selected.length) return;
+  const fields = bulkFieldDefinitions(key);
+  if (!fields.length) {
+    showToast("Bulk edit is not available for this table yet.");
+    return;
+  }
+  const form = $("#bulkEditForm");
+  form.reset();
+  form.elements.tableKey.value = key;
+  $("#bulkEditTitle").textContent = `Edit ${selected.length} ${bulkConfig(key)?.label || "Rows"}`;
+  $("#bulkEditField").innerHTML = fields.map((field) => `<option value="${field.name}">${field.label}</option>`).join("");
+  renderBulkValueInput(key);
+  $("#bulkEditDialog").showModal();
+}
+
+function renderBulkValueInput(key) {
+  const fieldName = $("#bulkEditField").value;
+  const field = bulkFieldDefinitions(key).find((item) => item.name === fieldName);
+  if (!field) {
+    $("#bulkEditValue").innerHTML = "";
+    return;
+  }
+  const control = field.type === "select"
+    ? `<select name="value" required>${(field.options || []).map((option) => `<option value="${option.value}">${option.label}</option>`).join("")}</select>`
+    : `<input name="value" type="${field.type}" required>`;
+  $("#bulkEditValue").innerHTML = `<label>${field.label}${control}</label>`;
+}
+
+async function applyBulkEdit(form) {
+  if (!canManageMasters()) return;
+  const data = new FormData(form);
+  const key = data.get("tableKey");
+  const field = data.get("field");
+  const value = data.get("value");
+  const ids = Array.from(bulkSet(key));
+  if (!ids.length) return;
+  const boolValue = value === "true";
+  ids.forEach((id) => {
+    if (key === "courses") {
+      const item = state.courses.find((course) => course.id === id);
+      if (!item) return;
+      if (field === "hallId") {
+        item.hallId = value;
+        item.hall = hallName(value);
+        state.hallBookings.filter((booking) => booking.courseId === id).forEach((booking) => booking.hallId = value);
+      } else if (field === "seats") item.seats = Number(value) || item.seats;
+      else item[field] = value;
+    }
+    if (key === "programs") {
+      const item = state.programs.find((program) => program.id === id);
+      if (item) item[field] = value;
+    }
+    if (key === "teachers") {
+      const item = state.teachers.find((teacher) => teacher.id === id);
+      if (item) item[field] = value;
+    }
+    if (key === "registrations") {
+      state.participants.forEach((participant) => registrationsForParticipant(participant).forEach((registration) => {
+        if (registration.id !== id) return;
+        if (field === "eligible") registration.eligible = boolValue;
+        else registration[field] = value;
+        if (registration === currentRegistration(participant)) syncParticipantFromRegistration(participant, registration);
+      }));
+    }
+    if (key === "accommodation-blocks") {
+      const item = state.blocks.find((block) => block.id === id);
+      if (item) item[field] = value;
+    }
+    if (key === "accommodation-floors") {
+      const item = state.floors.find((floor) => floor.id === id);
+      if (item) item[field] = value;
+    }
+    if (key === "accommodation-rooms") {
+      const item = state.rooms.find((room) => room.id === id);
+      if (!item) return;
+      if (field === "beds") item.beds = Number(value) || item.beds;
+      else item[field] = value;
+    }
+    if (key === "halls") {
+      const item = state.halls.find((hall) => hall.id === id);
+      if (!item) return;
+      if (field === "capacity") item.capacity = Number(value) || item.capacity;
+      else item[field] = value;
+    }
+    if (key === "hall-bookings") {
+      const item = state.hallBookings.find((booking) => booking.id === id);
+      if (item) item[field] = value;
+    }
+  });
+  if (key === "access-users") {
+    const payload = field === "active" ? { active: boolValue, updated_at: new Date().toISOString() } : { [field]: value, updated_at: new Date().toISOString() };
+    const result = await supabaseClient.from("user_roles").update(payload).in("user_id", ids);
+    if (result.error) {
+      showToast(result.error.message || "Unable to update users.");
+      return;
+    }
+    await loadAccessManagementData();
+  } else if (key === "access-roles") {
+    if (field === "active" && !boolValue && accessUsers.some((user) => ids.includes(user.role_id) && user.active)) {
+      showToast("Cannot deactivate roles assigned to active users.");
+      return;
+    }
+    const result = await supabaseClient.from("roles").update({ active: boolValue, updated_at: new Date().toISOString() }).in("id", ids);
+    if (result.error) {
+      showToast(result.error.message || "Unable to update roles.");
+      return;
+    }
+    await loadAccessManagementData();
+  }
+  bulkSet(key).clear();
+  $("#bulkEditDialog").close();
+  renderAll();
+  showToast(`Bulk updated ${ids.length} row(s).`);
+}
+
 function ensureTableChrome(tbodyId, key, columns = []) {
   const tbody = $(`#${tbodyId}`);
   if (!tbody) return;
@@ -1014,7 +1213,10 @@ function ensureTableChrome(tbodyId, key, columns = []) {
   const stateForTable = tableConfig(key);
   const headerRow = table.querySelector("thead tr");
   if (headerRow) {
-    headerRow.innerHTML = columns.map((column) => tableHeaderCell(key, column, stateForTable)).join("");
+    const selectionHeader = bulkConfig(key) && canManageMasters()
+      ? `<th class="select-cell"><input type="checkbox" data-row-select-all="${key}" aria-label="Select visible rows"></th>`
+      : "";
+    headerRow.innerHTML = selectionHeader + columns.map((column) => tableHeaderCell(key, column, stateForTable)).join("");
   }
   let footer = table.querySelector(`tfoot[data-table-pagination="${key}"]`);
   if (!footer) {
@@ -1073,10 +1275,16 @@ function renderTablePagination(key, result) {
   const pagination = document.querySelector(`tfoot[data-table-pagination="${key}"]`);
   if (!pagination) return;
   const colspan = pagination.closest("table")?.querySelectorAll("thead th").length || 1;
+  const selectedCount = bulkSet(key).size;
+  const bulkAction = bulkConfig(key) && canManageMasters() ? `
+    <button class="secondary-button" type="button" data-bulk-edit="${key}" ${selectedCount ? "" : "disabled"}>Bulk Edit</button>
+    ${selectedCount ? `<button class="secondary-button" type="button" data-bulk-clear="${key}">Clear</button>` : ""}
+  ` : "";
   pagination.innerHTML = `<tr><td colspan="${colspan}">
     <div class="table-footer">
-      <span>${result.filtered ? `${(result.page - 1) * tablePageSize + 1}-${Math.min(result.page * tablePageSize, result.filtered)} of ${result.filtered}${result.filtered === result.total ? "" : ` filtered from ${result.total}`}` : "No matching records"}</span>
+      <span>${result.filtered ? `${(result.page - 1) * tablePageSize + 1}-${Math.min(result.page * tablePageSize, result.filtered)} of ${result.filtered}${result.filtered === result.total ? "" : ` filtered from ${result.total}`}` : "No matching records"}${selectedCount ? ` | ${selectedCount} selected` : ""}</span>
       <div class="row-actions">
+        ${bulkAction}
         <button class="secondary-button" type="button" data-table-page="${key}" data-page-direction="previous" ${result.page === 1 ? "disabled" : ""}>Previous</button>
         <strong>Page ${result.page} / ${result.pageCount}</strong>
         <button class="secondary-button" type="button" data-table-page="${key}" data-page-direction="next" ${result.page === result.pageCount ? "disabled" : ""}>Next</button>
@@ -1317,6 +1525,7 @@ function renderCourses() {
     const status = course.status || programLifecycleStatus(course);
     return `
       <tr class="batch-master-row ${selectedCourseId === course.id ? "participant-row-selected" : ""}" data-batch-view="${course.id}" tabindex="0">
+        ${renderSelectionCell("courses", course.id)}
         <td><strong>${course.name}</strong><br><span class="muted">${course.eligibility} | ${sessions.length} session(s)</span><br><span class="pill ${statusClass(status)}">${status}</span></td>
         <td>${course.start}<br><span class="muted">${course.end}</span></td>
         <td>${teacherByName(course.teacher) ? `<button class="text-link-button" type="button" data-linked-teacher="${teacherByName(course.teacher).id}">${course.teacher}</button>` : course.teacher}</td>
@@ -1324,7 +1533,7 @@ function renderCourses() {
         <td>${course.hall}</td>
       </tr>
     `;
-  }).join("") || `<tr><td colspan="5"><span class="muted">No programs found.</span></td></tr>`;
+  }).join("") || `<tr><td colspan="${canManageMasters() ? 6 : 5}"><span class="muted">No programs found.</span></td></tr>`;
   renderTablePagination("courses", result);
   renderBatchDetail();
 }
@@ -1469,6 +1678,7 @@ function renderPrograms() {
   });
   $("#programRows").innerHTML = result.rows.map((program) => `
     <tr>
+      ${renderSelectionCell("programs", program.id)}
       <td><strong>${program.name}</strong><br><span class="muted">${program.parentId ? `Under ${state.programs.find((item) => item.id === program.parentId)?.name || "Root"}` : "Root course family"}</span></td>
       <td>${program.code}</td>
       <td>${program.level}</td>
@@ -1482,7 +1692,7 @@ function renderPrograms() {
         </div>
       </td>
     </tr>
-    ${program.parentId ? `<tr><td colspan="6">
+    ${program.parentId ? `<tr><td colspan="${canManageMasters() ? 7 : 6}">
       <div class="session-template-list">
         <strong>Course Session Plan</strong>
         ${(program.sessionTemplates || []).map((session) => `
@@ -1496,7 +1706,7 @@ function renderPrograms() {
         `).join("") || "<span class=\"muted\">No sessions planned.</span>"}
       </div>
     </td></tr>` : ""}
-  `).join("") || `<tr><td colspan="6"><span class="muted">No courses found.</span></td></tr>`;
+  `).join("") || `<tr><td colspan="${canManageMasters() ? 7 : 6}"><span class="muted">No courses found.</span></td></tr>`;
   renderTablePagination("programs", result);
 }
 
@@ -1527,6 +1737,7 @@ function renderTeachers() {
     const programs = state.courses.filter((course) => course.teacher === teacher.name);
     return `
       <tr class="teacher-master-row ${teacher.id === selectedTeacherId ? "participant-row-selected" : ""}" data-teacher-view="${teacher.id}" tabindex="0">
+        ${renderSelectionCell("teachers", teacher.id)}
         <td><strong>${teacher.name}</strong><br><span class="muted">${teacher.email}</span></td>
         <td>${teacher.speciality}</td>
         <td>${teacher.phone}<br><span class="muted">${teacher.email}</span></td>
@@ -1538,7 +1749,7 @@ function renderTeachers() {
         </td>
       </tr>
     `;
-  }).join("") || `<tr><td colspan="5"><span class="muted">No teachers found.</span></td></tr>`;
+  }).join("") || `<tr><td colspan="${canManageMasters() ? 6 : 5}"><span class="muted">No teachers found.</span></td></tr>`;
   renderTablePagination("teachers", result);
   const selected = teachers.find((teacher) => teacher.id === selectedTeacherId);
   if (!selected) {
@@ -1744,6 +1955,7 @@ function renderRegistrations() {
   const showActions = canReviewRegistrations();
   $("#participantRows").innerHTML = result.rows.map(({ participant, registration }) => `
     <tr>
+      ${renderSelectionCell("registrations", registration.id)}
       <td><strong><button class="text-link-button" type="button" data-linked-participant="${participant.id}">${participant.name}</button></strong><br><span class="muted">${participant.id} | ${participant.phone}</span></td>
       <td><button class="text-link-button" type="button" data-linked-batch="${registration.courseId}">${courseName(registration.courseId)}</button><br><span class="muted">${registration.registeredOn || "Registration date not set"}</span></td>
       <td><span class="pill ${statusClass(registration.status)}">${registration.status}</span></td>
@@ -1759,7 +1971,7 @@ function renderRegistrations() {
         `}
       </td>
     </tr>
-  `).join("") || `<tr><td colspan="6"><span class="muted">No registrations found.</span></td></tr>`;
+  `).join("") || `<tr><td colspan="${canManageMasters() ? 7 : 6}"><span class="muted">No registrations found.</span></td></tr>`;
   renderTablePagination("registrations", result);
 }
 
@@ -1795,6 +2007,7 @@ function renderRooms() {
     const floors = state.floors.filter((floor) => floor.blockId === block.id).length;
     const rooms = state.rooms.filter((room) => room.blockId === block.id).length;
     return `<tr>
+      ${renderSelectionCell("accommodation-blocks", block.id)}
       <td><strong>${block.name}</strong><br><span class="muted">${block.notes || "No notes"}</span></td>
       <td>${block.gender}</td>
       <td>${floors}</td>
@@ -1809,6 +2022,7 @@ function renderRooms() {
   });
   const floorRows = floorResult.rows.map((floor) => `
     <tr>
+      ${renderSelectionCell("accommodation-floors", floor.id)}
       <td><strong>${floor.name}</strong></td>
       <td>${blockName(floor.blockId)}</td>
       <td>${state.rooms.filter((room) => room.floorId === floor.id).length}</td>
@@ -1826,6 +2040,7 @@ function renderRooms() {
     const guests = state.participants.filter((p) => currentRegistration(p)?.roomId === room.id);
     const percent = Math.round((guests.length / room.beds) * 100);
     return `<tr>
+      ${renderSelectionCell("accommodation-rooms", room.id)}
       <td><strong>${room.name}</strong><br><span class="muted">${guests.length ? guests.map((guest) => guest.name).join(", ") : "No guests assigned"}</span></td>
       <td>${blockName(room.blockId)}</td>
       <td>${floorName(room.floorId)}</td>
@@ -1887,6 +2102,7 @@ function renderHalls() {
   });
   const hallRows = hallResult.rows.map((hall) => `
     <tr>
+      ${renderSelectionCell("halls", hall.id)}
       <td><strong>${hall.name}</strong></td>
       <td>${hall.capacity}</td>
       <td>${hall.location}</td>
@@ -1902,6 +2118,7 @@ function renderHalls() {
   });
   const bookingRows = bookingResult.rows.map((booking) => `
     <tr>
+      ${renderSelectionCell("hall-bookings", booking.id)}
       <td><button class="text-link-button" type="button" data-linked-batch="${booking.courseId}">${courseName(booking.courseId)}</button></td>
       <td>${hallName(booking.hallId)}</td>
       <td>${booking.start}<br><span class="muted">${booking.end}</span></td>
@@ -1985,6 +2202,7 @@ function renderAccessManagement() {
         : "<span class=\"muted\">Not linked</span>";
     return `
       <tr>
+        ${renderSelectionCell("access-users", user.user_id)}
         <td><strong>${user.display_name}</strong><br><span class="muted">${user.login_email || user.user_id}</span></td>
         <td>${role?.name || user.role_id}<br><span class="muted">${user.role_id}</span></td>
         <td>${linkedRecord}</td>
@@ -2010,6 +2228,7 @@ function renderAccessManagement() {
     const assigned = accessUsers.filter((user) => user.role_id === role.id).length;
     return `
       <tr>
+        ${renderSelectionCell("access-roles", role.id)}
         <td><strong>${role.name}</strong><br><span class="muted">${role.id}${assigned ? ` | ${assigned} user(s)` : ""}</span></td>
         <td>
           <div class="permission-list">
@@ -2895,6 +3114,12 @@ function bindEvents() {
       $("#accessRoleDialog").close();
       return;
     }
+    const cancelBulkEdit = event.target.closest("#closeBulkEdit, #cancelBulkEdit");
+    if (cancelBulkEdit) {
+      event.preventDefault();
+      $("#bulkEditDialog").close();
+      return;
+    }
     const cancelAttendanceReason = event.target.closest("#closeAttendanceReason, #cancelAttendanceReason");
     if (cancelAttendanceReason) {
       event.preventDefault();
@@ -2930,6 +3155,37 @@ function bindEvents() {
       const stateForTable = tableConfig(tablePage.dataset.tablePage);
       stateForTable.page += tablePage.dataset.pageDirection === "next" ? 1 : -1;
       renderAll();
+      return;
+    }
+    const rowSelectAll = event.target.closest("[data-row-select-all]");
+    if (rowSelectAll) {
+      const key = rowSelectAll.dataset.rowSelectAll;
+      const selected = bulkSet(key);
+      document.querySelectorAll(`[data-row-select="${key}"]`).forEach((checkbox) => {
+        checkbox.checked = rowSelectAll.checked;
+        if (rowSelectAll.checked) selected.add(checkbox.value);
+        else selected.delete(checkbox.value);
+      });
+      renderAll();
+      return;
+    }
+    const rowSelect = event.target.closest("[data-row-select]");
+    if (rowSelect) {
+      const selected = bulkSet(rowSelect.dataset.rowSelect);
+      if (rowSelect.checked) selected.add(rowSelect.value);
+      else selected.delete(rowSelect.value);
+      renderAll();
+      return;
+    }
+    const bulkClear = event.target.closest("[data-bulk-clear]");
+    if (bulkClear) {
+      bulkSet(bulkClear.dataset.bulkClear).clear();
+      renderAll();
+      return;
+    }
+    const bulkEdit = event.target.closest("[data-bulk-edit]");
+    if (bulkEdit) {
+      openBulkEditDialog(bulkEdit.dataset.bulkEdit);
       return;
     }
     const linkedTeacher = event.target.closest("[data-linked-teacher]");
@@ -3333,6 +3589,14 @@ function bindEvents() {
     if (event.submitter?.value === "cancel") return;
     event.preventDefault();
     await saveAccessRole(event.currentTarget);
+  });
+  $("#bulkEditField").addEventListener("change", (event) => {
+    renderBulkValueInput($("#bulkEditForm").elements.tableKey.value);
+  });
+  $("#bulkEditForm").addEventListener("submit", async (event) => {
+    if (event.submitter?.value === "cancel") return;
+    event.preventDefault();
+    await applyBulkEdit(event.currentTarget);
   });
   $("#attendanceReasonForm").addEventListener("submit", (event) => {
     if (event.submitter?.value === "cancel") return;

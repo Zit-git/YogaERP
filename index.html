@@ -588,6 +588,27 @@
       </form>
     </dialog>
 
+    <dialog id="bulkEditDialog">
+      <form method="dialog" id="bulkEditForm">
+        <div class="modal-header">
+          <div>
+            <p class="eyebrow">Bulk Edit</p>
+            <h2 id="bulkEditTitle">Edit Selected Rows</h2>
+          </div>
+          <button class="icon-button" id="closeBulkEdit" value="cancel" aria-label="Close" type="button">x</button>
+        </div>
+        <input type="hidden" name="tableKey">
+        <div class="form-grid">
+          <label>Field<select name="field" id="bulkEditField"></select></label>
+          <div id="bulkEditValue"></div>
+        </div>
+        <menu>
+          <button class="secondary-button" id="cancelBulkEdit" value="cancel" type="button">Cancel</button>
+          <button class="primary-button" value="default" type="submit">Apply Changes</button>
+        </menu>
+      </form>
+    </dialog>
+
     <dialog id="attendanceReasonDialog">
       <form method="dialog" id="attendanceReasonForm">
         <div class="modal-header">
@@ -614,6 +635,6 @@
     <div id="toast" role="status" aria-live="polite"></div>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="supabase-config.js?v=35"></script>
-    <script src="app.js?v=57"></script>
+    <script src="app.js?v=59"></script>
   </body>
 </html>

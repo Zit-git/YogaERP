@@ -1019,6 +1019,17 @@ th, td {
   vertical-align: middle;
 }
 
+.select-cell {
+  width: 42px;
+  text-align: center;
+}
+
+.select-cell input {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+}
+
 th {
   color: var(--muted);
   background: #f8fafc;
