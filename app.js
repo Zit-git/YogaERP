@@ -26,12 +26,13 @@ let portalProgramPage = 1;
 const portalProgramPageSize = 5;
 let calendarDate = getInitialCalendarDate();
 let selectedCourseId = "";
+let selectedProgramId = "";
 let selectedParticipantId = "";
 let selectedTeacherId = "";
 let linkBackStack = [];
 let accommodationTab = "blocks";
 let hallTab = "halls";
-let openDetailView = { courses: false, teachers: false, participants: false };
+let openDetailView = { courses: false, programs: false, teachers: false, participants: false };
 const tableState = {};
 const bulkSelections = {};
 const tablePageSize = 8;
@@ -1340,6 +1341,7 @@ function currentSelectionState(label = "Back") {
   return {
     label,
     selectedCourseId,
+    selectedProgramId,
     selectedParticipantId,
     selectedTeacherId,
     viewId: currentViewId()
@@ -1348,6 +1350,7 @@ function currentSelectionState(label = "Back") {
 
 function restoreSelectionState(stateSnapshot) {
   selectedCourseId = stateSnapshot.selectedCourseId;
+  selectedProgramId = stateSnapshot.selectedProgramId;
   selectedParticipantId = stateSnapshot.selectedParticipantId;
   selectedTeacherId = stateSnapshot.selectedTeacherId;
   activateView(stateSnapshot.viewId);
@@ -1357,9 +1360,11 @@ function restoreSelectionState(stateSnapshot) {
 function openLinkedRecord(viewId, selections = {}, label = "Back") {
   linkBackStack.push(currentSelectionState(label));
   if (selections.courseId) selectedCourseId = selections.courseId;
+  if (selections.programId) selectedProgramId = selections.programId;
   if (selections.participantId) selectedParticipantId = selections.participantId;
   if (selections.teacherId) selectedTeacherId = selections.teacherId;
   if (viewId === "courses") openDetailView.courses = true;
+  if (viewId === "programs") openDetailView.programs = true;
   if (viewId === "teachers") openDetailView.teachers = true;
   if (viewId === "participants") openDetailView.participants = true;
   activateView(viewId);
@@ -1655,10 +1660,15 @@ function renderBatchDetail() {
 }
 
 function renderPrograms() {
+  if (!selectedProgramId || !state.programs.some((program) => program.id === selectedProgramId)) {
+    selectedProgramId = state.programs.find((program) => program.parentId)?.id || state.programs[0]?.id || "";
+  }
+  const layout = document.querySelector(".program-master-layout");
+  if (layout) layout.classList.toggle("detail-open", openDetailView.programs);
   const childrenFor = (parentId) => state.programs.filter((program) => program.parentId === parentId);
   const renderNode = (program) => {
     const children = childrenFor(program.id);
-    return `<div class="program-node ${program.parentId ? "is-child" : "is-parent"}">
+    return `<div class="program-node ${program.parentId ? "is-child" : "is-parent"} ${program.id === selectedProgramId ? "is-selected" : ""}">
       <div>
         <strong>${program.name}</strong>
         <span>${program.code} | ${program.level}${program.duration ? ` | ${program.duration}` : ""}</span>
@@ -1688,7 +1698,7 @@ function renderPrograms() {
     eligibility: (a, b) => a.eligibility.localeCompare(b.eligibility)
   });
   $("#programRows").innerHTML = result.rows.map((program) => `
-    <tr>
+    <tr class="program-master-row ${program.id === selectedProgramId ? "participant-row-selected" : ""}" data-program-view="${program.id}" tabindex="0">
       ${renderSelectionCell("programs", program.id)}
       <td><strong>${program.name}</strong><br><span class="muted">${program.parentId ? `Under ${state.programs.find((item) => item.id === program.parentId)?.name || "Root"}` : "Root course family"}</span></td>
       <td>${program.code}</td>
@@ -1698,27 +1708,130 @@ function renderPrograms() {
       <td>
         <div class="row-actions">
           <button class="secondary-button" type="button" data-program-edit="${program.id}">Edit</button>
-          ${program.parentId ? `<button class="secondary-button" type="button" data-program-session-add="${program.id}">Add Session</button>` : ""}
           <button class="danger-button" type="button" data-program-delete="${program.id}">Delete</button>
         </div>
       </td>
     </tr>
-    ${program.parentId ? `<tr><td colspan="${canManageMasters() ? 7 : 6}">
-      <div class="session-template-list">
-        <strong>Course Session Plan</strong>
-        ${(program.sessionTemplates || []).map((session) => `
-          <div class="session-template-row">
-            <span>Day ${session.day} | ${session.time} | ${session.title} | ${session.topic}</span>
-            <span class="row-actions">
-              <button class="secondary-button" type="button" data-program-session-edit="${program.id}" data-session-template-id="${session.id}">Edit</button>
-              <button class="danger-button" type="button" data-program-session-delete="${program.id}" data-session-template-id="${session.id}">Delete</button>
-            </span>
-          </div>
-        `).join("") || "<span class=\"muted\">No sessions planned.</span>"}
-      </div>
-    </td></tr>` : ""}
   `).join("") || `<tr><td colspan="${canManageMasters() ? 7 : 6}"><span class="muted">No courses found.</span></td></tr>`;
   renderTablePagination("programs", result);
+  renderProgramDetail();
+}
+
+function programChildren(programId) {
+  return state.programs.filter((program) => program.parentId === programId);
+}
+
+function programAncestors(program) {
+  const ancestors = [];
+  let current = program;
+  while (current?.parentId) {
+    current = state.programs.find((item) => item.id === current.parentId);
+    if (current) ancestors.unshift(current);
+  }
+  return ancestors;
+}
+
+function conductedProgramsForCourse(program) {
+  if (!program) return [];
+  const collectIds = (programId) => [programId, ...programChildren(programId).flatMap((child) => collectIds(child.id))];
+  const hierarchyIds = new Set(collectIds(program.id));
+  const hierarchyNames = new Set(state.programs.filter((item) => hierarchyIds.has(item.id)).map((item) => item.name));
+  return state.courses.filter((course) => hierarchyIds.has(course.programId) || (!course.programId && hierarchyNames.has(course.name)));
+}
+
+function renderProgramHierarchyContext(program) {
+  const ancestors = programAncestors(program);
+  const children = programChildren(program.id);
+  return `
+    <div class="course-hierarchy-context">
+      ${ancestors.length ? `<div class="hierarchy-line">${ancestors.map((item) => `<span>${item.name}</span>`).join("<strong>&rsaquo;</strong>")}<strong>&rsaquo;</strong><span class="is-current">${program.name}</span></div>` : `<div class="hierarchy-line"><span class="is-current">${program.name}</span></div>`}
+      ${children.length ? `<div class="program-tree compact-tree">${children.map((child) => `
+        <div class="program-node is-child">
+          <strong>${child.name}</strong>
+          <span>${child.code} | ${child.level}${child.duration ? ` | ${child.duration}` : ""}</span>
+        </div>
+      `).join("")}</div>` : `<span class="muted">No child courses under this course.</span>`}
+    </div>
+  `;
+}
+
+function renderProgramDetail() {
+  const program = state.programs.find((item) => item.id === selectedProgramId);
+  if (!program) {
+    $("#programDetail").innerHTML = `<p class="muted">No courses recorded yet.</p>`;
+    return;
+  }
+  const sessions = program.sessionTemplates || [];
+  const conducted = conductedProgramsForCourse(program);
+  $("#programDetail").innerHTML = `
+    <div class="batch-detail-heading">
+      <div>
+        <h3>${program.name}</h3>
+        <p class="muted">${program.code} | ${program.level}${program.duration ? ` | ${program.duration}` : ""}</p>
+      </div>
+      <div class="row-actions">
+        ${canManageMasters() ? `<button class="primary-button" type="button" data-program-session-add="${program.id}">Add Session</button><button class="secondary-button" type="button" data-program-edit="${program.id}">Edit Course</button>` : ""}
+      </div>
+    </div>
+    <div class="course-meta detail-meta">
+      <div><span>Eligibility</span><strong>${program.eligibility}</strong></div>
+      <div><span>Parent Course</span><strong>${state.programs.find((item) => item.id === program.parentId)?.name || "Root course family"}</strong></div>
+      <div><span>Child Courses</span><strong>${programChildren(program.id).length}</strong></div>
+      <div><span>Session Plan</span><strong>${sessions.length} session(s)</strong></div>
+      <div><span>Programs Conducted</span><strong>${conducted.length}</strong></div>
+    </div>
+    <section class="participant-subform">
+      <div class="subform-header">
+        <h3>Course Hierarchy</h3>
+        <span class="muted">Context for this course</span>
+      </div>
+      ${renderProgramHierarchyContext(program)}
+    </section>
+    <section class="participant-subform">
+      <div class="subform-header">
+        <h3>Course Session Plan</h3>
+        <span class="muted">Applied to programs scheduled from this course</span>
+      </div>
+      <div class="table-wrap subform-table">
+        <table>
+          <thead><tr><th>Day</th><th>Time</th><th>Session</th><th>Topic</th><th>Actions</th></tr></thead>
+          <tbody>
+            ${sessions.length ? sessions.map((session) => `
+              <tr>
+                <td>Day ${session.day}</td>
+                <td>${session.time}</td>
+                <td>${session.title}</td>
+                <td>${session.topic}</td>
+                <td>${canManageMasters() ? `<div class="row-actions"><button class="secondary-button" type="button" data-program-session-edit="${program.id}" data-session-template-id="${session.id}">Edit</button><button class="danger-button" type="button" data-program-session-delete="${program.id}" data-session-template-id="${session.id}">Delete</button></div>` : "<span class=\"muted\">View only</span>"}</td>
+              </tr>
+            `).join("") : `<tr><td colspan="5"><span class="muted">No sessions planned for this course.</span></td></tr>`}
+          </tbody>
+        </table>
+      </div>
+    </section>
+    <section class="participant-subform">
+      <div class="subform-header">
+        <h3>Programs Conducted</h3>
+        <span class="muted">${conducted.length} record(s)</span>
+      </div>
+      <div class="table-wrap subform-table">
+        <table>
+          <thead><tr><th>Program</th><th>Dates</th><th>Teacher</th><th>Hall</th><th>Status</th></tr></thead>
+          <tbody>
+            ${conducted.length ? conducted.map((course) => `
+              <tr>
+                <td><button class="text-link-button" type="button" data-course-open="${course.id}">${course.name}</button></td>
+                <td>${course.start}<br><span class="muted">${course.end}</span></td>
+                <td>${teacherByName(course.teacher) ? `<button class="text-link-button" type="button" data-linked-teacher="${teacherByName(course.teacher).id}">${course.teacher}</button>` : course.teacher}</td>
+                <td>${course.hall}</td>
+                <td><span class="pill ${statusClass(course.status || programLifecycleStatus(course))}">${course.status || programLifecycleStatus(course)}</span></td>
+              </tr>
+            `).join("") : `<tr><td colspan="5"><span class="muted">No programs conducted for this course yet.</span></td></tr>`}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  `;
 }
 
 function renderTeachers() {
@@ -3162,7 +3275,7 @@ function bindEvents() {
     const openCourse = event.target.closest("[data-course-open]");
     if (openCourse) {
       const openedCourseId = openCourse.dataset.courseOpen;
-      openLinkedRecord("courses", { courseId: openedCourseId }, "Back to Dashboard");
+      openLinkedRecord("courses", { courseId: openedCourseId }, currentViewId() === "programs" ? "Back to Course" : "Back to Dashboard");
       requestAnimationFrame(() => {
         document.querySelector(`[data-batch-view="${openedCourseId}"]`)?.scrollIntoView({ behavior: "smooth", block: "center" });
       });
@@ -3378,6 +3491,13 @@ function bindEvents() {
       renderTeachers();
       return;
     }
+    const programView = event.target.closest("[data-program-view]");
+    if (programView && !event.target.closest("button")) {
+      selectedProgramId = programView.dataset.programView;
+      openDetailView.programs = true;
+      renderPrograms();
+      return;
+    }
     const participantView = event.target.closest("[data-participant-view]");
     if (participantView) {
       selectedParticipantId = participantView.dataset.participantView;
@@ -3436,6 +3556,14 @@ function bindEvents() {
       selectedTeacherId = teacherView.dataset.teacherView;
       openDetailView.teachers = true;
       renderTeachers();
+      return;
+    }
+    const programView = event.target.closest("[data-program-view]");
+    if (programView) {
+      event.preventDefault();
+      selectedProgramId = programView.dataset.programView;
+      openDetailView.programs = true;
+      renderPrograms();
       return;
     }
     const participantView = event.target.closest("[data-participant-view]");

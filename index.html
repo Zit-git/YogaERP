@@ -116,14 +116,14 @@
           <button class="primary-button" id="addProgram" type="button">Add Course</button>
         </div>
         <div class="program-master-layout">
-          <section class="panel">
+          <section class="panel program-hierarchy-panel">
             <div class="panel-header">
               <h2>Course Hierarchy</h2>
               <span class="muted">Master structure</span>
             </div>
             <div id="programHierarchy" class="program-tree"></div>
           </section>
-          <section class="panel">
+          <section class="panel program-list-panel">
             <div class="panel-header">
               <h2>Course Details</h2>
               <span class="muted">Codes, level, duration, and eligibility</span>
@@ -143,6 +143,16 @@
                 <tbody id="programRows"></tbody>
               </table>
             </div>
+          </section>
+          <button class="detail-back-button program-detail-back" type="button" data-record-back="programs" aria-label="Back to Courses" title="Back to Courses">←</button>
+          <section class="panel program-detail-panel">
+            <div class="panel-header">
+              <div>
+                <h2>Course Detail</h2>
+                <span class="muted">Hierarchy, session plan, and programs conducted</span>
+              </div>
+            </div>
+            <div id="programDetail"></div>
           </section>
         </div>
       </section>
@@ -636,6 +646,6 @@
     <div id="toast" role="status" aria-live="polite"></div>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="supabase-config.js?v=35"></script>
-    <script src="app.js?v=61"></script>
+    <script src="app.js?v=62"></script>
   </body>
 </html>

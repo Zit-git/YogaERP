@@ -610,6 +610,27 @@ textarea { resize: vertical; }
   gap: 14px;
 }
 
+.program-master-layout.detail-open {
+  display: block;
+}
+
+.program-master-layout.detail-open .program-hierarchy-panel,
+.program-master-layout.detail-open .program-list-panel {
+  display: none;
+}
+
+.program-detail-panel {
+  display: none;
+}
+
+.program-master-layout.detail-open .program-detail-panel {
+  display: block;
+}
+
+.program-master-layout.detail-open .program-detail-back {
+  display: inline-flex;
+}
+
 .program-tree {
   display: grid;
   gap: 10px;
@@ -627,9 +648,46 @@ textarea { resize: vertical; }
   background: #f4fffb;
 }
 
+.program-node.is-selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(15, 118, 110, 0.12);
+}
+
 .program-node strong,
 .program-node span {
   display: block;
+}
+
+.course-hierarchy-context {
+  display: grid;
+  gap: 12px;
+}
+
+.hierarchy-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.hierarchy-line span {
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #fff;
+}
+
+.hierarchy-line .is-current {
+  border-color: #a7d8ce;
+  background: #ecfdf8;
+  color: #134e4a;
+  font-weight: 800;
+}
+
+.compact-tree {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
 
 .program-node span {
@@ -883,6 +941,7 @@ textarea { resize: vertical; }
 
 .participant-master-row:hover td,
 .teacher-master-row:hover td,
+.program-master-row:hover td,
 .batch-master-row:hover td {
   background: #f0fdfa;
 }
