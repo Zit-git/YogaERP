@@ -1,66 +1,23 @@
-const seedData = {
-  programs: [
-    { id: "pg1", parentId: "", code: "YOGA", name: "Residential Yoga Courses", level: "Family", duration: "", eligibility: "Open course family" },
-    { id: "pg1-1", parentId: "pg1", code: "YOGA-FDN", name: "Foundation Yoga", level: "Level 1", duration: "7 days", eligibility: "Age 15+, basic fitness" },
-    { id: "pg1-2", parentId: "pg1", code: "YOGA-ADV", name: "Advanced Meditation", level: "Level 2", duration: "7 days", eligibility: "Completed foundation course" },
-    { id: "pg2", parentId: "", code: "SKY", name: "SKY & Kaya Kalpa Courses", level: "Family", duration: "", eligibility: "SKY practice pathway" },
-    { id: "pg2-1", parentId: "pg2", code: "SKY-KK", name: "Residential Kaya Kalpa", level: "Level 2", duration: "7 days", eligibility: "Prior SKY practice" },
-    { id: "pg2-2", parentId: "pg2", code: "SKY-THER", name: "Therapeutic Yoga", level: "Special", duration: "2 days", eligibility: "Medical clearance where applicable" }
-  ],
-  courses: [
-    { id: "c1", name: "Foundation Yoga - 7 Days", start: "2026-06-10", end: "2026-06-16", seats: 40, hall: "Mahalingam Hall", teacher: "Dr. Meenakshi", eligibility: "Age 15+, basic fitness" },
-    { id: "c2", name: "Residential Kaya Kalpa", start: "2026-06-18", end: "2026-06-24", seats: 32, hall: "Vethathiri Hall", teacher: "Prof. Arun", eligibility: "Prior SKY practice" },
-    { id: "c3", name: "Advanced Meditation Camp", start: "2026-07-02", end: "2026-07-08", seats: 28, hall: "Arivu Thirukovil", teacher: "Smt. Lalitha", eligibility: "Completed foundation course" }
-  ],
-  rooms: [
-    { id: "r1", name: "Block A - Room 101", gender: "Female", beds: 6 },
-    { id: "r2", name: "Block A - Room 102", gender: "Female", beds: 6 },
-    { id: "r3", name: "Block B - Room 201", gender: "Male", beds: 8 },
-    { id: "r4", name: "Block B - Room 202", gender: "Male", beds: 8 },
-    { id: "r5", name: "Family Cottage 1", gender: "Other", beds: 4 }
-  ],
-  blocks: [
-    { id: "b1", name: "Block A", gender: "Female", notes: "Residential dormitory" },
-    { id: "b2", name: "Block B", gender: "Male", notes: "Residential dormitory" },
-    { id: "b3", name: "Cottages", gender: "Other", notes: "Family accommodation" }
-  ],
-  floors: [
-    { id: "f1", blockId: "b1", name: "Ground Floor" },
-    { id: "f2", blockId: "b2", name: "First Floor" },
-    { id: "f3", blockId: "b3", name: "Cottage Row" }
-  ],
-  halls: [
-    { id: "h1", name: "Mahalingam Hall", capacity: 60, location: "Main Campus", notes: "Large yoga hall" },
-    { id: "h2", name: "Vethathiri Hall", capacity: 45, location: "Meditation Wing", notes: "Quiet hall" },
-    { id: "h3", name: "Arivu Thirukovil", capacity: 35, location: "Temple Block", notes: "Advanced practice hall" }
-  ],
-  hallBookings: [
-    { id: "hb1", courseId: "c1", hallId: "h1", start: "2026-06-10", end: "2026-06-16", notes: "Full program allocation" },
-    { id: "hb2", courseId: "c2", hallId: "h2", start: "2026-06-18", end: "2026-06-24", notes: "Full program allocation" },
-    { id: "hb3", courseId: "c3", hallId: "h3", start: "2026-07-02", end: "2026-07-08", notes: "Full program allocation" }
-  ],
-  teachers: [
-    { id: "t1", name: "Dr. Meenakshi", speciality: "Foundation yoga and residential orientation", phone: "9876501011", email: "meenakshi@example.com", notes: "Lead faculty for beginner programs" },
-    { id: "t2", name: "Prof. Arun", speciality: "Kaya Kalpa and SKY practice", phone: "9876501012", email: "arun@example.com", notes: "Handles eligibility interviews" },
-    { id: "t3", name: "Smt. Lalitha", speciality: "Advanced meditation", phone: "9876501013", email: "lalitha@example.com", notes: "Certificate approval reviewer" }
-  ],
-  participants: [
-    { id: "p1", name: "Anitha Raman", age: 34, gender: "Female", courseId: "c1", phone: "9876500011", email: "anitha@example.com", status: "Confirmed", eligible: true, roomId: "r1", checkedIn: true, attendance: 5, completion: "In Progress", certificate: false, address: "Coimbatore, Tamil Nadu", emergencyContact: "Raman - 9876501010", photo: "", notes: "Vegetarian meals", programHistory: [] },
-    { id: "p2", name: "Karthik Iyer", age: 42, gender: "Male", courseId: "c1", phone: "9876500012", email: "karthik@example.com", status: "Confirmed", eligible: true, roomId: "r3", checkedIn: false, attendance: 3, completion: "In Progress", certificate: false, address: "Erode, Tamil Nadu", emergencyContact: "Meera - 9876501020", photo: "", notes: "", programHistory: [] },
-    { id: "p3", name: "Sofia Thomas", age: 29, gender: "Female", courseId: "c2", phone: "9876500013", email: "sofia@example.com", status: "Pending", eligible: false, roomId: "", checkedIn: false, attendance: 0, completion: "Pending", certificate: false, address: "Kochi, Kerala", emergencyContact: "Thomas - 9876501030", photo: "", notes: "Needs eligibility review", programHistory: [] },
-    { id: "p4", name: "Ramesh Kumar", age: 55, gender: "Male", courseId: "c2", phone: "9876500014", email: "ramesh@example.com", status: "Waitlist", eligible: true, roomId: "", checkedIn: false, attendance: 0, completion: "Pending", certificate: false, address: "Madurai, Tamil Nadu", emergencyContact: "Lakshmi - 9876501040", photo: "", notes: "", programHistory: [] },
-    { id: "p5", name: "Leela Narayanan", age: 48, gender: "Female", courseId: "c3", phone: "9876500015", email: "leela@example.com", status: "Confirmed", eligible: true, roomId: "r2", checkedIn: true, attendance: 7, completion: "Completed", certificate: true, address: "Chennai, Tamil Nadu", emergencyContact: "Narayanan - 9876501050", photo: "", notes: "Certificate issued", programHistory: [
-      { programName: "Foundation Yoga", batchName: "Foundation Yoga - March Program", start: "2026-03-04", end: "2026-03-10", completion: "Completed", attendance: 7, certificate: true, accommodation: "Block A - Room 104" }
-    ] }
-  ]
-};
+const emptyState = () => ({
+  programs: [],
+  courses: [],
+  rooms: [],
+  blocks: [],
+  floors: [],
+  halls: [],
+  hallBookings: [],
+  teachers: [],
+  participants: []
+});
 
 const state = loadData();
 let currentSession = loadSession();
 const supabaseClient = createSupabaseClient();
-let hasLoadedRemoteData = !supabaseClient;
+let hasLoadedRemoteData = false;
+let isHydratingRemoteData = false;
+let appUsers = [];
 let remoteSaveTimer = null;
-let remoteStatus = supabaseClient ? "Supabase connecting" : "Local browser storage";
+let remoteStatus = supabaseClient ? "Supabase connecting" : "Supabase not configured";
 let currentFilter = "all";
 let calendarDate = getInitialCalendarDate();
 let selectedCourseId = "";
@@ -96,8 +53,8 @@ const $$ = (selector) => Array.from(document.querySelectorAll(selector));
 migrateState();
 
 function loadData() {
-  const stored = localStorage.getItem("aliyar-management-data");
-  return stored ? JSON.parse(stored) : structuredClone(seedData);
+  localStorage.removeItem("aliyar-management-data");
+  return emptyState();
 }
 
 function createSupabaseClient() {
@@ -108,10 +65,17 @@ function createSupabaseClient() {
 }
 
 async function loadRemoteData() {
-  if (!supabaseClient) return;
+  if (!supabaseClient) {
+    remoteStatus = "Supabase not configured";
+    renderAuthState();
+    return;
+  }
   try {
     remoteStatus = "Loading Supabase data";
     renderAuthState();
+    await loadSupabaseUsers();
+    refreshCurrentSessionFromUsers();
+    renderNav();
     const { data, error } = await supabaseClient
       .from("app_state")
       .select("payload")
@@ -124,17 +88,214 @@ async function loadRemoteData() {
       migrateState();
       remoteStatus = "Supabase connected";
     } else {
-      remoteStatus = "Supabase ready";
+      const relationalState = await loadRelationalData();
+      Object.keys(state).forEach((key) => delete state[key]);
+      Object.assign(state, relationalState);
+      migrateState();
+      remoteStatus = hasAnyRecords(state) ? "Supabase connected" : "Supabase connected - no records yet";
     }
     hasLoadedRemoteData = true;
+    calendarDate = getInitialCalendarDate();
+    isHydratingRemoteData = true;
     renderAll();
-    persistRemoteData();
+    isHydratingRemoteData = false;
+    if (!canAccessView(currentViewId())) activateView(defaultViewForRole());
+    renderNav();
   } catch (error) {
-    remoteStatus = "Supabase unavailable, using local data";
+    remoteStatus = "Supabase unavailable";
     hasLoadedRemoteData = false;
+    isHydratingRemoteData = false;
     renderAuthState();
     showToast(error.message || "Unable to load Supabase data.");
   }
+}
+
+async function loadSupabaseUsers() {
+  if (!supabaseClient) return;
+  const { data, error } = await supabaseClient
+    .from("users")
+    .select("id, login_id, role, display_name, linked_teacher_id, linked_participant_id, can_manage_masters, can_review_registrations, can_mark_attendance, active")
+    .eq("active", true)
+    .order("display_name");
+  if (error) {
+    appUsers = [];
+    showToast("Run supabase/users_and_roles.sql to enable login users.");
+    return;
+  }
+  appUsers = data || [];
+}
+
+function refreshCurrentSessionFromUsers() {
+  if (currentSession.role === "public") return;
+  const user = appUsers.find((item) => {
+    if (currentSession.userId && item.id === currentSession.userId) return true;
+    if (item.role !== currentSession.role) return false;
+    if (item.role === "admin") return item.login_id === currentSession.id || currentSession.id === "admin";
+    if (item.role === "teacher") return item.linked_teacher_id === currentSession.id;
+    if (item.role === "participant") return item.linked_participant_id === currentSession.id;
+    return false;
+  });
+  if (!user) {
+    currentSession = publicSession();
+    return;
+  }
+  const linkedId = user.role === "participant" ? user.linked_participant_id : user.role === "teacher" ? user.linked_teacher_id : user.id;
+  currentSession = {
+    role: user.role,
+    id: linkedId || user.id,
+    userId: user.id,
+    name: user.display_name || user.login_id,
+    permissions: {
+      canManageMasters: Boolean(user.can_manage_masters),
+      canReviewRegistrations: Boolean(user.can_review_registrations),
+      canMarkAttendance: Boolean(user.can_mark_attendance)
+    }
+  };
+}
+
+async function fetchSupabaseRows(tableName) {
+  const { data, error } = await supabaseClient.from(tableName).select("*");
+  if (error) throw error;
+  return data || [];
+}
+
+async function loadRelationalData() {
+  const [
+    courseMasters,
+    teachers,
+    halls,
+    blocks,
+    floors,
+    rooms,
+    batches,
+    participants,
+    registrations,
+    hallBookings
+  ] = await Promise.all([
+    fetchSupabaseRows("course_masters"),
+    fetchSupabaseRows("teachers"),
+    fetchSupabaseRows("program_halls"),
+    fetchSupabaseRows("accommodation_blocks"),
+    fetchSupabaseRows("accommodation_floors"),
+    fetchSupabaseRows("rooms"),
+    fetchSupabaseRows("batches"),
+    fetchSupabaseRows("participants"),
+    fetchSupabaseRows("registrations"),
+    fetchSupabaseRows("hall_bookings")
+  ]);
+  const nextState = {
+    programs: courseMasters.map((program) => ({
+      id: program.id,
+      parentId: program.parent_id || "",
+      code: program.code || "",
+      name: program.name,
+      level: program.level || "",
+      duration: program.duration || "",
+      eligibility: program.eligibility || "",
+      sessionTemplates: program.session_templates || []
+    })),
+    teachers: teachers.map((teacher) => ({
+      id: teacher.id,
+      name: teacher.name,
+      speciality: teacher.speciality || "",
+      phone: teacher.phone || "",
+      email: teacher.email || "",
+      photo: teacher.photo || "",
+      notes: teacher.notes || ""
+    })),
+    halls: halls.map((hall) => ({
+      id: hall.id,
+      name: hall.name,
+      capacity: Number(hall.capacity) || 1,
+      location: hall.location || "",
+      notes: hall.notes || ""
+    })),
+    blocks: blocks.map((block) => ({
+      id: block.id,
+      name: block.name,
+      gender: block.gender || "",
+      notes: block.notes || ""
+    })),
+    floors: floors.map((floor) => ({
+      id: floor.id,
+      blockId: floor.block_id || "",
+      name: floor.name
+    })),
+    rooms: rooms.map((room) => ({
+      id: room.id,
+      blockId: room.block_id || "",
+      floorId: room.floor_id || "",
+      name: room.name,
+      gender: room.gender || "",
+      beds: Number(room.beds) || 1
+    })),
+    courses: batches.map((batch) => {
+      const hall = halls.find((item) => item.id === batch.hall_id);
+      return {
+        id: batch.id,
+        programId: batch.program_id || "",
+        name: batch.name,
+        start: batch.start_date || "",
+        end: batch.end_date || "",
+        seats: Number(batch.seats) || 1,
+        hallId: batch.hall_id || "",
+        hall: hall?.name || "",
+        teacher: batch.teacher_name || teachers.find((teacher) => teacher.id === batch.teacher_id)?.name || "",
+        eligibility: batch.eligibility || "",
+        sessions: batch.sessions || []
+      };
+    }),
+    participants: participants.map((participant) => ({
+      id: participant.id,
+      name: participant.name,
+      age: Number(participant.age) || "",
+      gender: participant.gender || "",
+      phone: participant.phone || "",
+      email: participant.email || "",
+      address: participant.address || "",
+      emergencyContact: participant.emergency_contact || "",
+      photo: participant.photo || "",
+      notes: participant.notes || "",
+      programHistory: participant.program_history || [],
+      registrations: []
+    })),
+    hallBookings: hallBookings.map((booking) => ({
+      id: booking.id,
+      courseId: booking.batch_id || "",
+      hallId: booking.hall_id || "",
+      start: booking.start_date || "",
+      end: booking.end_date || "",
+      notes: booking.notes || ""
+    }))
+  };
+  const participantById = new Map(nextState.participants.map((participant) => [participant.id, participant]));
+  registrations.forEach((registration) => {
+    const participant = participantById.get(registration.participant_id);
+    if (!participant) return;
+    participant.registrations.push({
+      id: registration.id,
+      courseId: registration.batch_id || "",
+      status: registration.status || "Pending",
+      eligible: Boolean(registration.eligible),
+      roomId: registration.room_id || "",
+      checkedIn: Boolean(registration.checked_in),
+      attendance: Number(registration.attendance) || 0,
+      completion: registration.completion || "Pending",
+      certificate: Boolean(registration.certificate),
+      sessionAttendance: registration.session_attendance || [],
+      notes: registration.notes || "",
+      registeredOn: registration.registered_on || new Date().toISOString().slice(0, 10)
+    });
+  });
+  nextState.participants.forEach((participant) => {
+    const registration = currentRegistration(participant);
+    if (registration) syncParticipantFromRegistration(participant, registration);
+  });
+  return nextState;
+}
+
+function hasAnyRecords(data) {
+  return Object.values(data).some((value) => Array.isArray(value) && value.length > 0);
 }
 
 function scheduleRemoteSave() {
@@ -311,20 +472,37 @@ async function syncRelationalTables() {
 
 function loadSession() {
   const stored = localStorage.getItem("aliyar-session");
-  return stored ? JSON.parse(stored) : { role: "public", id: "", name: "Public Visitor" };
+  if (!stored) return publicSession();
+  const parsed = JSON.parse(stored);
+  return {
+    ...publicSession(),
+    ...parsed,
+    permissions: { ...publicSession().permissions, ...(parsed.permissions || {}) }
+  };
 }
 
 function saveSession() {
   localStorage.setItem("aliyar-session", JSON.stringify(currentSession));
 }
 
+function publicSession() {
+  return {
+    role: "public",
+    id: "",
+    userId: "",
+    name: "Public Visitor",
+    permissions: {
+      canManageMasters: false,
+      canReviewRegistrations: false,
+      canMarkAttendance: false
+    }
+  };
+}
+
 function migrateState() {
-  if (!Array.isArray(state.programs) || state.programs.length === 0) {
-    state.programs = structuredClone(seedData.programs);
-  }
-  if (!state.programs.some((program) => program.parentId === "")) {
-    state.programs = structuredClone(seedData.programs);
-  }
+  Object.entries(emptyState()).forEach(([key, value]) => {
+    if (!Array.isArray(state[key])) state[key] = value;
+  });
   state.programs.forEach((program) => {
     program.name = program.name.replace("Residential Yoga Programs", "Residential Yoga Courses").replace("SKY & Kaya Kalpa Programs", "SKY & Kaya Kalpa Courses");
     program.eligibility = program.eligibility.replace("Open program family", "Open course family");
@@ -335,21 +513,6 @@ function migrateState() {
       ];
     }
   });
-  if (!Array.isArray(state.teachers) || state.teachers.length === 0) {
-    state.teachers = structuredClone(seedData.teachers);
-  }
-  if (!Array.isArray(state.blocks) || state.blocks.length === 0) {
-    state.blocks = structuredClone(seedData.blocks);
-  }
-  if (!Array.isArray(state.floors) || state.floors.length === 0) {
-    state.floors = structuredClone(seedData.floors);
-  }
-  if (!Array.isArray(state.halls) || state.halls.length === 0) {
-    state.halls = structuredClone(seedData.halls);
-  }
-  if (!Array.isArray(state.hallBookings) || state.hallBookings.length === 0) {
-    state.hallBookings = structuredClone(seedData.hallBookings);
-  }
   state.hallBookings.forEach((booking) => {
     booking.notes = (booking.notes || "").replaceAll("batch", "program").replaceAll("Batch", "Program");
   });
@@ -375,17 +538,9 @@ function migrateState() {
     teacher.photo ||= "";
     teacher.notes = (teacher.notes || "").replaceAll("batches", "programs").replaceAll("Batches", "Programs");
   });
-  const participantDefaults = {
-    p1: ["Coimbatore, Tamil Nadu", "Raman - 9876501010"],
-    p2: ["Erode, Tamil Nadu", "Meera - 9876501020"],
-    p3: ["Kochi, Kerala", "Thomas - 9876501030"],
-    p4: ["Madurai, Tamil Nadu", "Lakshmi - 9876501040"],
-    p5: ["Chennai, Tamil Nadu", "Narayanan - 9876501050"]
-  };
   state.participants.forEach((participant) => {
-    const defaults = participantDefaults[participant.id] || ["", ""];
-    participant.address ||= defaults[0];
-    participant.emergencyContact ||= defaults[1];
+    participant.address ||= "";
+    participant.emergencyContact ||= "";
     participant.photo ||= "";
     if (!Array.isArray(participant.programHistory)) {
       participant.programHistory = [];
@@ -416,18 +571,6 @@ function migrateState() {
       }
       updateRegistrationCompletion(registration);
     });
-    if (participant.id === "p5" && !participant.programHistory.some((program) => program.batchName === "Foundation Yoga - March Program")) {
-      participant.programHistory.unshift({
-        programName: "Foundation Yoga",
-        batchName: "Foundation Yoga - March Program",
-        start: "2026-03-04",
-        end: "2026-03-10",
-        completion: "Completed",
-        attendance: 7,
-        certificate: true,
-        accommodation: "Block A - Room 104"
-      });
-    }
   });
   const participantsByPhone = new Map();
   state.participants.forEach((participant) => {
@@ -449,7 +592,7 @@ function migrateState() {
 }
 
 function saveData() {
-  localStorage.setItem("aliyar-management-data", JSON.stringify(state));
+  if (isHydratingRemoteData) return;
   scheduleRemoteSave();
 }
 
@@ -653,15 +796,15 @@ function isAdmin() {
 }
 
 function canManageMasters() {
-  return isAdmin();
+  return Boolean(currentSession.permissions?.canManageMasters);
 }
 
 function canReviewRegistrations() {
-  return isAdmin();
+  return Boolean(currentSession.permissions?.canReviewRegistrations);
 }
 
 function canMarkAttendance() {
-  return currentSession.role === "admin" || currentSession.role === "teacher";
+  return Boolean(currentSession.permissions?.canMarkAttendance);
 }
 
 function currentParticipant() {
@@ -684,36 +827,47 @@ function visibleRegistrationRows() {
 
 function findLoginRecord(role, identifier) {
   const value = identifier.trim().toLowerCase();
-  if (role === "admin") {
-    return value === "admin" ? { id: "admin", name: "System Administrator" } : null;
-  }
-  if (role === "teacher") {
-    return state.teachers.find((teacher) => [teacher.id, teacher.name, teacher.email, teacher.phone].some((field) => String(field || "").toLowerCase() === value)) || null;
-  }
-  if (role === "participant") {
-    return state.participants.find((participant) => [participant.id, participant.phone, participant.email, participant.name].some((field) => String(field || "").toLowerCase() === value)) || null;
-  }
-  return null;
+  return appUsers.find((user) => user.role === role && String(user.login_id || "").toLowerCase() === value) || null;
 }
 
-function login(role, identifier) {
-  const record = findLoginRecord(role, identifier);
-  if (!record) {
-    showToast("Login record not found. Use participant ID/phone, teacher ID/email, or admin.");
+async function login(role, identifier) {
+  if (!supabaseClient) {
+    showToast("Supabase is not configured. Login requires Supabase users.");
     return;
   }
-  currentSession = { role, id: record.id, name: record.name };
-  selectedParticipantId = role === "participant" ? record.id : selectedParticipantId;
-  selectedTeacherId = role === "teacher" ? record.id : selectedTeacherId;
+  if (!hasLoadedRemoteData) {
+    showToast("Supabase data is still loading. Please try again in a moment.");
+    return;
+  }
+  await loadSupabaseUsers();
+  const record = findLoginRecord(role, identifier);
+  if (!record) {
+    showToast("Login user not found in Supabase users table.");
+    return;
+  }
+  const linkedId = role === "participant" ? record.linked_participant_id : role === "teacher" ? record.linked_teacher_id : record.id;
+  currentSession = {
+    role,
+    id: linkedId || record.id,
+    userId: record.id,
+    name: record.display_name || record.login_id,
+    permissions: {
+      canManageMasters: Boolean(record.can_manage_masters),
+      canReviewRegistrations: Boolean(record.can_review_registrations),
+      canMarkAttendance: Boolean(record.can_mark_attendance)
+    }
+  };
+  selectedParticipantId = role === "participant" ? currentSession.id : selectedParticipantId;
+  selectedTeacherId = role === "teacher" ? currentSession.id : selectedTeacherId;
   linkBackStack = [];
   renderNav();
   renderAll();
   activateView(defaultViewForRole(role));
-  showToast(`Logged in as ${record.name}.`);
+  showToast(`Logged in as ${currentSession.name}.`);
 }
 
 function logout() {
-  currentSession = { role: "public", id: "", name: "Public Visitor" };
+  currentSession = publicSession();
   linkBackStack = [];
   renderNav();
   renderAll();
@@ -745,7 +899,7 @@ function statusClass(value) {
 }
 
 function getInitialCalendarDate() {
-  const firstCourse = loadData().courses
+  const firstCourse = state.courses
     .map((course) => new Date(`${course.start}T00:00:00`))
     .sort((a, b) => a - b)[0];
   return firstCourse || new Date();
@@ -878,8 +1032,7 @@ function renderPermissionChrome() {
     "#autoAssign",
     "#addHall",
     "#addHallBooking",
-    "#generateCertificates",
-    "#resetData"
+    "#generateCertificates"
   ];
   adminControls.forEach((selector) => {
     const element = $(selector);
@@ -1977,13 +2130,6 @@ function bindEvents() {
   $("#addHall").addEventListener("click", () => canManageMasters() && addOrEditHall());
   $("#addHallBooking").addEventListener("click", () => canManageMasters() && addOrEditHallBooking());
   $("#generateCertificates").addEventListener("click", () => canManageMasters() && generateCertificates());
-  $("#resetData").addEventListener("click", () => {
-    if (!canManageMasters()) return;
-    localStorage.removeItem("aliyar-management-data");
-    Object.assign(state, structuredClone(seedData));
-    renderAll();
-    showToast("Demo data reset.");
-  });
   $("#globalSearch").addEventListener("input", renderRegistrations);
   $("#registrationFilter").addEventListener("click", (event) => {
     const button = event.target.closest("button[data-filter]");
@@ -2004,10 +2150,10 @@ function bindEvents() {
     hallTab = button.dataset.hallTab;
     renderHalls();
   });
-  $("#loginForm").addEventListener("submit", (event) => {
+  $("#loginForm").addEventListener("submit", async (event) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    login(form.get("role"), form.get("identifier"));
+    await login(form.get("role"), form.get("identifier"));
     event.currentTarget.reset();
   });
   document.body.addEventListener("click", (event) => {

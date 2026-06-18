@@ -18,7 +18,6 @@
       </div>
       <div class="operator-card auth-card" id="authCard"></div>
       <nav id="nav"></nav>
-      <button class="ghost-button full" id="resetData" type="button">Reset seed records</button>
     </aside>
 
     <main class="app-shell">
@@ -76,14 +75,12 @@
                   <option value="admin">Admin</option>
                 </select>
               </label>
-              <label>Login ID<input name="identifier" placeholder="Participant ID, phone, teacher email, or admin" required></label>
-              <label>Password<input name="password" type="password" placeholder="Demo login accepts any password"></label>
+              <label>Login ID<input name="identifier" placeholder="Supabase user login ID" required></label>
+              <label>Password<input name="password" type="password" placeholder="Optional for current setup"></label>
               <button class="primary-button" type="submit">Login</button>
             </form>
             <div class="login-help">
-              <span>Participant: p1 or 9876500011</span>
-              <span>Teacher: t1 or meenakshi@example.com</span>
-              <span>Admin: admin</span>
+              <span>Use the Login ID configured in Supabase Users.</span>
             </div>
           </section>
         </div>
@@ -483,6 +480,6 @@
     <div id="toast" role="status" aria-live="polite"></div>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="supabase-config.js?v=35"></script>
-    <script src="app.js?v=35"></script>
+    <script src="app.js?v=38"></script>
   </body>
 </html>

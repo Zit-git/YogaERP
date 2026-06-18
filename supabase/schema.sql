@@ -130,6 +130,21 @@ create table if not exists public.hall_bookings (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.users (
+  id text primary key default gen_random_uuid()::text,
+  login_id text not null unique,
+  role text not null check (role in ('admin', 'teacher', 'participant')),
+  display_name text not null,
+  linked_teacher_id text references public.teachers(id) on delete set null,
+  linked_participant_id text references public.participants(id) on delete set null,
+  can_manage_masters boolean not null default false,
+  can_review_registrations boolean not null default false,
+  can_mark_attendance boolean not null default false,
+  active boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 alter table public.app_state enable row level security;
 alter table public.course_masters enable row level security;
 alter table public.teachers enable row level security;
@@ -141,6 +156,7 @@ alter table public.batches enable row level security;
 alter table public.participants enable row level security;
 alter table public.registrations enable row level security;
 alter table public.hall_bookings enable row level security;
+alter table public.users enable row level security;
 
 create policy "temporary_demo_read_app_state"
   on public.app_state for select
@@ -148,5 +164,17 @@ create policy "temporary_demo_read_app_state"
 
 create policy "temporary_demo_write_app_state"
   on public.app_state for all
+  using (true)
+  with check (true);
+
+drop policy if exists "temporary_demo_read_users" on public.users;
+drop policy if exists "temporary_demo_write_users" on public.users;
+
+create policy "temporary_demo_read_users"
+  on public.users for select
+  using (true);
+
+create policy "temporary_demo_write_users"
+  on public.users for all
   using (true)
   with check (true);
