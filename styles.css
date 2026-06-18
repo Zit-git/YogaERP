@@ -710,14 +710,8 @@ textarea { resize: vertical; }
 }
 
 .participants-master-layout.detail-open > .table-wrap,
-.participants-master-layout.detail-open > .table-toolbar,
-.participants-master-layout.detail-open > .pagination-bar,
 .teachers-master-layout.detail-open > .table-wrap,
-.teachers-master-layout.detail-open > .table-toolbar,
-.teachers-master-layout.detail-open > .pagination-bar,
-.batches-master-layout.detail-open > .table-wrap,
-.batches-master-layout.detail-open > .table-toolbar,
-.batches-master-layout.detail-open > .pagination-bar {
+.batches-master-layout.detail-open > .table-wrap {
   display: none;
 }
 
@@ -742,6 +736,18 @@ textarea { resize: vertical; }
 .batch-detail-panel {
   position: sticky;
   top: 22px;
+}
+
+.participants-master-layout:not(.detail-open) .participant-detail-panel,
+.teachers-master-layout:not(.detail-open) .teacher-detail-panel,
+.batches-master-layout:not(.detail-open) .batch-detail-panel {
+  display: none;
+}
+
+.participants-master-layout:not(.detail-open),
+.teachers-master-layout:not(.detail-open),
+.batches-master-layout:not(.detail-open) {
+  grid-template-columns: 1fr;
 }
 
 .profile-card {
@@ -1000,31 +1006,6 @@ textarea { resize: vertical; }
   box-shadow: var(--shadow);
 }
 
-.table-toolbar {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  align-items: end;
-  margin: 0 0 10px;
-}
-
-.table-search,
-.table-sort {
-  display: grid;
-  gap: 5px;
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.table-search {
-  width: min(420px, 100%);
-}
-
-.table-sort {
-  min-width: 210px;
-}
-
 table {
   width: 100%;
   border-collapse: collapse;
@@ -1044,6 +1025,56 @@ th {
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0;
+}
+
+.column-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 28px;
+}
+
+.column-sort {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.column-sort .table-icon-button {
+  width: 22px;
+  height: 22px;
+  min-height: 22px;
+  padding: 0;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.column-sort .table-icon-button.is-active {
+  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.column-filter {
+  width: 100%;
+  margin-top: 6px;
+  padding: 7px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  text-transform: none;
+}
+
+tfoot td {
+  background: #fff;
+}
+
+.table-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 13px;
 }
 
 .table-header-control {

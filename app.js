@@ -1002,55 +1002,61 @@ function showToast(message) {
 }
 
 function tableConfig(key) {
-  tableState[key] ||= { search: "", sort: "", page: 1 };
+  tableState[key] ||= { filters: {}, sort: "", direction: "asc", page: 1 };
   return tableState[key];
 }
 
-function ensureTableChrome(tbodyId, key, placeholder, sortOptions = []) {
+function ensureTableChrome(tbodyId, key, columns = []) {
   const tbody = $(`#${tbodyId}`);
   if (!tbody) return;
-  const wrap = tbody.closest(".table-wrap");
-  if (!wrap) return;
-  if (!wrap.previousElementSibling?.matches(`[data-table-controls="${key}"]`)) {
-    wrap.insertAdjacentHTML("beforebegin", `
-      <div class="table-toolbar" data-table-controls="${key}">
-        <label class="table-search">
-          <span>Search</span>
-          <input type="search" data-table-search="${key}" placeholder="${placeholder}">
-        </label>
-        <label class="table-sort">
-          <span>Sort</span>
-          <select data-table-sort="${key}"></select>
-        </label>
-      </div>
-    `);
-  }
-  if (!wrap.nextElementSibling?.matches(`[data-table-pagination="${key}"]`)) {
-    wrap.insertAdjacentHTML("afterend", `<div class="pagination-bar" data-table-pagination="${key}"></div>`);
-  }
+  const table = tbody.closest("table");
+  if (!table) return;
   const stateForTable = tableConfig(key);
-  const searchInput = document.querySelector(`[data-table-search="${key}"]`);
-  const sortSelect = document.querySelector(`[data-table-sort="${key}"]`);
-  if (searchInput) searchInput.value = stateForTable.search;
-  if (sortSelect) {
-    sortSelect.innerHTML = sortOptions.map((option) => `<option value="${option.value}">${option.label}</option>`).join("");
-    sortSelect.value = stateForTable.sort || sortOptions[0]?.value || "";
-    stateForTable.sort = sortSelect.value;
+  const headerRow = table.querySelector("thead tr");
+  if (headerRow) {
+    headerRow.innerHTML = columns.map((column) => tableHeaderCell(key, column, stateForTable)).join("");
+  }
+  let footer = table.querySelector(`tfoot[data-table-pagination="${key}"]`);
+  if (!footer) {
+    table.insertAdjacentHTML("beforeend", `<tfoot data-table-pagination="${key}"></tfoot>`);
   }
 }
 
-function sortOptionsHtml(key, options) {
-  const selected = tableConfig(key).sort || options[0]?.value || "";
-  tableConfig(key).sort = selected;
-  return options.map((option) => `<option value="${option.value}" ${option.value === selected ? "selected" : ""}>${option.label}</option>`).join("");
+function tableHeaderCell(tableKey, column, stateForTable) {
+  const filterValue = stateForTable.filters[column.key] || "";
+  const isSorted = stateForTable.sort === column.key;
+  const direction = isSorted ? stateForTable.direction : "";
+  const filter = column.filter === false ? "" : `
+    <input class="column-filter" type="search" data-column-filter="${tableKey}" data-column-key="${column.key}" value="${filterValue}" placeholder="Filter">
+  `;
+  const sort = column.sort === false ? "" : `
+    <span class="column-sort">
+      <button class="table-icon-button ${isSorted && direction === "asc" ? "is-active" : ""}" type="button" data-column-sort="${tableKey}" data-column-key="${column.key}" data-sort-direction="asc" title="Sort ascending" aria-label="Sort ${column.label} ascending">↑</button>
+      <button class="table-icon-button ${isSorted && direction === "desc" ? "is-active" : ""}" type="button" data-column-sort="${tableKey}" data-column-key="${column.key}" data-sort-direction="desc" title="Sort descending" aria-label="Sort ${column.label} descending">↓</button>
+    </span>
+  `;
+  return `<th>
+    <div class="column-header">
+      <span>${column.label}</span>
+      ${sort}
+    </div>
+    ${filter}
+  </th>`;
 }
 
-function tableRows(key, rows, searchFields, sorters) {
+function tableRows(key, rows, columns, sorters) {
   const stateForTable = tableConfig(key);
-  const search = stateForTable.search.trim().toLowerCase();
-  let filtered = rows.filter((row) => !search || searchFields(row).join(" ").toLowerCase().includes(search));
-  const sorter = sorters[stateForTable.sort] || Object.values(sorters)[0];
-  if (sorter) filtered = [...filtered].sort(sorter);
+  let filtered = rows.filter((row) => columns.every((column) => {
+    const filterValue = (stateForTable.filters[column.key] || "").trim().toLowerCase();
+    if (!filterValue || column.filter === false) return true;
+    return String(column.value(row) ?? "").toLowerCase().includes(filterValue);
+  }));
+  const sortableColumns = columns.filter((column) => column.sort !== false);
+  stateForTable.sort ||= sortableColumns[0]?.key || "";
+  const sorter = sorters[stateForTable.sort] || ((a, b) => String(columns.find((column) => column.key === stateForTable.sort)?.value(a) ?? "").localeCompare(String(columns.find((column) => column.key === stateForTable.sort)?.value(b) ?? "")));
+  if (sorter) {
+    filtered = [...filtered].sort((a, b) => sorter(a, b) * (stateForTable.direction === "desc" ? -1 : 1));
+  }
   const pageCount = Math.max(1, Math.ceil(filtered.length / tablePageSize));
   stateForTable.page = Math.min(Math.max(1, stateForTable.page), pageCount);
   const start = (stateForTable.page - 1) * tablePageSize;
@@ -1064,16 +1070,19 @@ function tableRows(key, rows, searchFields, sorters) {
 }
 
 function renderTablePagination(key, result) {
-  const pagination = document.querySelector(`[data-table-pagination="${key}"]`);
+  const pagination = document.querySelector(`tfoot[data-table-pagination="${key}"]`);
   if (!pagination) return;
-  pagination.innerHTML = result.filtered ? `
-    <span>${(result.page - 1) * tablePageSize + 1}-${Math.min(result.page * tablePageSize, result.filtered)} of ${result.filtered}${result.filtered === result.total ? "" : ` filtered from ${result.total}`}</span>
-    <div class="row-actions">
-      <button class="secondary-button" type="button" data-table-page="${key}" data-page-direction="previous" ${result.page === 1 ? "disabled" : ""}>Previous</button>
-      <strong>Page ${result.page} / ${result.pageCount}</strong>
-      <button class="secondary-button" type="button" data-table-page="${key}" data-page-direction="next" ${result.page === result.pageCount ? "disabled" : ""}>Next</button>
+  const colspan = pagination.closest("table")?.querySelectorAll("thead th").length || 1;
+  pagination.innerHTML = `<tr><td colspan="${colspan}">
+    <div class="table-footer">
+      <span>${result.filtered ? `${(result.page - 1) * tablePageSize + 1}-${Math.min(result.page * tablePageSize, result.filtered)} of ${result.filtered}${result.filtered === result.total ? "" : ` filtered from ${result.total}`}` : "No matching records"}</span>
+      <div class="row-actions">
+        <button class="secondary-button" type="button" data-table-page="${key}" data-page-direction="previous" ${result.page === 1 ? "disabled" : ""}>Previous</button>
+        <strong>Page ${result.page} / ${result.pageCount}</strong>
+        <button class="secondary-button" type="button" data-table-page="${key}" data-page-direction="next" ${result.page === result.pageCount ? "disabled" : ""}>Next</button>
+      </div>
     </div>
-  ` : `<span>No matching records</span>`;
+  </td></tr>`;
 }
 
 function newId(prefix) {
@@ -1287,17 +1296,20 @@ function renderCourses() {
   }
   const layout = document.querySelector(".batches-master-layout");
   if (layout) layout.classList.toggle("detail-open", openDetailView.courses);
-  ensureTableChrome("batchRows", "courses", "Search programs", [
-    { value: "startAsc", label: "Start date" },
-    { value: "nameAsc", label: "Program name" },
-    { value: "teacherAsc", label: "Teacher" },
-    { value: "statusAsc", label: "Status" }
-  ]);
-  const result = tableRows("courses", state.courses, (course) => [course.name, course.teacher, course.hall, course.eligibility, course.status], {
-    startAsc: (a, b) => dateFromInput(a.start) - dateFromInput(b.start),
-    nameAsc: (a, b) => a.name.localeCompare(b.name),
-    teacherAsc: (a, b) => a.teacher.localeCompare(b.teacher),
-    statusAsc: (a, b) => (a.status || programLifecycleStatus(a)).localeCompare(b.status || programLifecycleStatus(b))
+  const columns = [
+    { key: "name", label: "Program", value: (course) => course.name },
+    { key: "start", label: "Schedule", value: (course) => `${course.start} ${course.end}` },
+    { key: "teacher", label: "Teacher", value: (course) => course.teacher },
+    { key: "seats", label: "Seats", value: (course) => Number(course.seats) },
+    { key: "hall", label: "Hall", value: (course) => course.hall }
+  ];
+  ensureTableChrome("batchRows", "courses", columns);
+  const result = tableRows("courses", state.courses, columns, {
+    start: (a, b) => dateFromInput(a.start) - dateFromInput(b.start),
+    name: (a, b) => a.name.localeCompare(b.name),
+    teacher: (a, b) => a.teacher.localeCompare(b.teacher),
+    seats: (a, b) => Number(a.seats) - Number(b.seats),
+    hall: (a, b) => a.hall.localeCompare(b.hall)
   });
   $("#batchRows").innerHTML = result.rows.map((course) => {
     const registered = allRegistrationRows().filter(({ registration }) => registration.courseId === course.id).length;
@@ -1439,15 +1451,21 @@ function renderPrograms() {
     </div>`;
   };
   $("#programHierarchy").innerHTML = childrenFor("").map(renderNode).join("");
-  ensureTableChrome("programRows", "programs", "Search course master", [
-    { value: "nameAsc", label: "Course name" },
-    { value: "codeAsc", label: "Code" },
-    { value: "levelAsc", label: "Level" }
-  ]);
-  const result = tableRows("programs", state.programs, (program) => [program.name, program.code, program.level, program.eligibility], {
-    nameAsc: (a, b) => a.name.localeCompare(b.name),
-    codeAsc: (a, b) => a.code.localeCompare(b.code),
-    levelAsc: (a, b) => a.level.localeCompare(b.level)
+  const columns = [
+    { key: "name", label: "Course", value: (program) => program.name },
+    { key: "code", label: "Code", value: (program) => program.code },
+    { key: "level", label: "Level", value: (program) => program.level },
+    { key: "duration", label: "Duration", value: (program) => program.duration || "Varies" },
+    { key: "eligibility", label: "Eligibility", value: (program) => program.eligibility },
+    { key: "actions", label: "Actions", value: () => "", sort: false, filter: false }
+  ];
+  ensureTableChrome("programRows", "programs", columns);
+  const result = tableRows("programs", state.programs, columns, {
+    name: (a, b) => a.name.localeCompare(b.name),
+    code: (a, b) => a.code.localeCompare(b.code),
+    level: (a, b) => a.level.localeCompare(b.level),
+    duration: (a, b) => (a.duration || "").localeCompare(b.duration || ""),
+    eligibility: (a, b) => a.eligibility.localeCompare(b.eligibility)
   });
   $("#programRows").innerHTML = result.rows.map((program) => `
     <tr>
@@ -1491,15 +1509,19 @@ function renderTeachers() {
   }
   const layout = document.querySelector(".teachers-master-layout");
   if (layout) layout.classList.toggle("detail-open", openDetailView.teachers);
-  ensureTableChrome("teacherRows", "teachers", "Search teachers", [
-    { value: "nameAsc", label: "Teacher name" },
-    { value: "specialityAsc", label: "Speciality" },
-    { value: "programsDesc", label: "Programs conducted" }
-  ]);
-  const result = tableRows("teachers", teachers, (teacher) => [teacher.name, teacher.email, teacher.phone, teacher.speciality], {
-    nameAsc: (a, b) => a.name.localeCompare(b.name),
-    specialityAsc: (a, b) => a.speciality.localeCompare(b.speciality),
-    programsDesc: (a, b) => state.courses.filter((course) => course.teacher === b.name).length - state.courses.filter((course) => course.teacher === a.name).length
+  const columns = [
+    { key: "name", label: "Teacher", value: (teacher) => teacher.name },
+    { key: "speciality", label: "Speciality", value: (teacher) => teacher.speciality },
+    { key: "contact", label: "Contact", value: (teacher) => `${teacher.phone} ${teacher.email}` },
+    { key: "programs", label: "Programs", value: (teacher) => state.courses.filter((course) => course.teacher === teacher.name).length },
+    { key: "actions", label: "Actions", value: () => "", sort: false, filter: false }
+  ];
+  ensureTableChrome("teacherRows", "teachers", columns);
+  const result = tableRows("teachers", teachers, columns, {
+    name: (a, b) => a.name.localeCompare(b.name),
+    speciality: (a, b) => a.speciality.localeCompare(b.speciality),
+    contact: (a, b) => a.email.localeCompare(b.email),
+    programs: (a, b) => state.courses.filter((course) => course.teacher === a.name).length - state.courses.filter((course) => course.teacher === b.name).length
   });
   $("#teacherRows").innerHTML = result.rows.map((teacher) => {
     const programs = state.courses.filter((course) => course.teacher === teacher.name);
@@ -1585,18 +1607,18 @@ function renderParticipantsMaster() {
   }
   const layout = document.querySelector(".participants-master-layout");
   if (layout) layout.classList.toggle("detail-open", openDetailView.participants);
-  ensureTableChrome("participantMasterRows", "participants", "Search participants", [
-    { value: "nameAsc", label: "Participant name" },
-    { value: "programAsc", label: "Program" },
-    { value: "completionAsc", label: "Completion" }
-  ]);
-  const result = tableRows("participants", participants, (participant) => {
-    const registration = currentRegistration(participant);
-    return [participant.name, participant.email, participant.phone, participant.gender, courseName(registration.courseId), registration.completion, roomName(registration.roomId)];
-  }, {
-    nameAsc: (a, b) => a.name.localeCompare(b.name),
-    programAsc: (a, b) => courseName(currentRegistration(a).courseId).localeCompare(courseName(currentRegistration(b).courseId)),
-    completionAsc: (a, b) => currentRegistration(a).completion.localeCompare(currentRegistration(b).completion)
+  const columns = [
+    { key: "name", label: "Participant", value: (participant) => participant.name },
+    { key: "program", label: "Program", value: (participant) => courseName(currentRegistration(participant).courseId) },
+    { key: "completion", label: "Completion", value: (participant) => currentRegistration(participant).completion },
+    { key: "accommodation", label: "Accommodation", value: (participant) => roomName(currentRegistration(participant).roomId) }
+  ];
+  ensureTableChrome("participantMasterRows", "participants", columns);
+  const result = tableRows("participants", participants, columns, {
+    name: (a, b) => a.name.localeCompare(b.name),
+    program: (a, b) => courseName(currentRegistration(a).courseId).localeCompare(courseName(currentRegistration(b).courseId)),
+    completion: (a, b) => currentRegistration(a).completion.localeCompare(currentRegistration(b).completion),
+    accommodation: (a, b) => roomName(currentRegistration(a).roomId).localeCompare(roomName(currentRegistration(b).roomId))
   });
   $("#participantMasterRows").innerHTML = result.rows.map((participant) => {
     const registration = currentRegistration(participant);
@@ -1703,17 +1725,21 @@ function renderParticipantsMaster() {
 
 function renderRegistrations() {
   let rows = visibleRegistrationRows().filter(({ registration }) => currentFilter === "all" || registration.status === currentFilter);
-  ensureTableChrome("participantRows", "registrations", "Search registrations", [
-    { value: "nameAsc", label: "Participant name" },
-    { value: "programAsc", label: "Program" },
-    { value: "statusAsc", label: "Status" },
-    { value: "dateDesc", label: "Registration date" }
-  ]);
-  const result = tableRows("registrations", rows, ({ participant, registration }) => [participant.name, participant.email, participant.phone, participant.id, courseName(registration.courseId), registration.status, roomName(registration.roomId)], {
-    nameAsc: (a, b) => a.participant.name.localeCompare(b.participant.name),
-    programAsc: (a, b) => courseName(a.registration.courseId).localeCompare(courseName(b.registration.courseId)),
-    statusAsc: (a, b) => a.registration.status.localeCompare(b.registration.status),
-    dateDesc: (a, b) => (b.registration.registeredOn || "").localeCompare(a.registration.registeredOn || "")
+  const columns = [
+    { key: "name", label: "Name", value: ({ participant }) => participant.name },
+    { key: "program", label: "Program", value: ({ registration }) => courseName(registration.courseId) },
+    { key: "status", label: "Status", value: ({ registration }) => registration.status },
+    { key: "eligible", label: "Eligibility", value: ({ registration }) => registration.eligible ? "Verified" : "Needs review" },
+    { key: "room", label: "Room", value: ({ registration }) => roomName(registration.roomId) },
+    { key: "actions", label: "Actions", value: () => "", sort: false, filter: false }
+  ];
+  ensureTableChrome("participantRows", "registrations", columns);
+  const result = tableRows("registrations", rows, columns, {
+    name: (a, b) => a.participant.name.localeCompare(b.participant.name),
+    program: (a, b) => courseName(a.registration.courseId).localeCompare(courseName(b.registration.courseId)),
+    status: (a, b) => a.registration.status.localeCompare(b.registration.status),
+    eligible: (a, b) => Number(a.registration.eligible) - Number(b.registration.eligible),
+    room: (a, b) => roomName(a.registration.roomId).localeCompare(roomName(b.registration.roomId))
   });
   const showActions = canReviewRegistrations();
   $("#participantRows").innerHTML = result.rows.map(({ participant, registration }) => `
@@ -1738,9 +1764,32 @@ function renderRegistrations() {
 }
 
 function renderRooms() {
-  const blockResult = tableRows("accommodation-blocks", state.blocks, (block) => [block.name, block.gender, block.notes], {
-    nameAsc: (a, b) => a.name.localeCompare(b.name),
-    genderAsc: (a, b) => a.gender.localeCompare(b.gender)
+  const blockColumns = [
+    { key: "name", label: "Block", value: (block) => block.name },
+    { key: "gender", label: "Gender", value: (block) => block.gender },
+    { key: "floors", label: "Floors", value: (block) => state.floors.filter((floor) => floor.blockId === block.id).length },
+    { key: "rooms", label: "Rooms", value: (block) => state.rooms.filter((room) => room.blockId === block.id).length },
+    { key: "actions", label: "Actions", value: () => "", sort: false, filter: false }
+  ];
+  const floorColumns = [
+    { key: "name", label: "Floor", value: (floor) => floor.name },
+    { key: "block", label: "Block", value: (floor) => blockName(floor.blockId) },
+    { key: "rooms", label: "Rooms", value: (floor) => state.rooms.filter((room) => room.floorId === floor.id).length },
+    { key: "actions", label: "Actions", value: () => "", sort: false, filter: false }
+  ];
+  const roomColumns = [
+    { key: "name", label: "Room", value: (room) => room.name },
+    { key: "block", label: "Block", value: (room) => blockName(room.blockId) },
+    { key: "floor", label: "Floor", value: (room) => floorName(room.floorId) },
+    { key: "gender", label: "Type", value: (room) => room.gender },
+    { key: "beds", label: "Occupancy", value: (room) => Number(room.beds) },
+    { key: "actions", label: "Actions", value: () => "", sort: false, filter: false }
+  ];
+  const blockResult = tableRows("accommodation-blocks", state.blocks, blockColumns, {
+    name: (a, b) => a.name.localeCompare(b.name),
+    gender: (a, b) => a.gender.localeCompare(b.gender),
+    floors: (a, b) => state.floors.filter((floor) => floor.blockId === a.id).length - state.floors.filter((floor) => floor.blockId === b.id).length,
+    rooms: (a, b) => state.rooms.filter((room) => room.blockId === a.id).length - state.rooms.filter((room) => room.blockId === b.id).length
   });
   const blockRows = blockResult.rows.map((block) => {
     const floors = state.floors.filter((floor) => floor.blockId === block.id).length;
@@ -1753,9 +1802,10 @@ function renderRooms() {
       <td><div class="row-actions"><button class="secondary-button" type="button" data-block-edit="${block.id}">Edit</button><button class="danger-button" type="button" data-block-delete="${block.id}">Delete</button></div></td>
     </tr>`;
   }).join("");
-  const floorResult = tableRows("accommodation-floors", state.floors, (floor) => [floor.name, blockName(floor.blockId)], {
-    nameAsc: (a, b) => a.name.localeCompare(b.name),
-    blockAsc: (a, b) => blockName(a.blockId).localeCompare(blockName(b.blockId))
+  const floorResult = tableRows("accommodation-floors", state.floors, floorColumns, {
+    name: (a, b) => a.name.localeCompare(b.name),
+    block: (a, b) => blockName(a.blockId).localeCompare(blockName(b.blockId)),
+    rooms: (a, b) => state.rooms.filter((room) => room.floorId === a.id).length - state.rooms.filter((room) => room.floorId === b.id).length
   });
   const floorRows = floorResult.rows.map((floor) => `
     <tr>
@@ -1765,10 +1815,12 @@ function renderRooms() {
       <td><div class="row-actions"><button class="secondary-button" type="button" data-floor-edit="${floor.id}">Edit</button><button class="danger-button" type="button" data-floor-delete="${floor.id}">Delete</button></div></td>
     </tr>
   `).join("");
-  const roomResult = tableRows("accommodation-rooms", state.rooms, (room) => [room.name, blockName(room.blockId), floorName(room.floorId), room.gender], {
-    nameAsc: (a, b) => a.name.localeCompare(b.name),
-    blockAsc: (a, b) => blockName(a.blockId).localeCompare(blockName(b.blockId)),
-    bedsDesc: (a, b) => Number(b.beds) - Number(a.beds)
+  const roomResult = tableRows("accommodation-rooms", state.rooms, roomColumns, {
+    name: (a, b) => a.name.localeCompare(b.name),
+    block: (a, b) => blockName(a.blockId).localeCompare(blockName(b.blockId)),
+    floor: (a, b) => floorName(a.floorId).localeCompare(floorName(b.floorId)),
+    gender: (a, b) => a.gender.localeCompare(b.gender),
+    beds: (a, b) => Number(a.beds) - Number(b.beds)
   });
   const roomRows = roomResult.rows.map((room) => {
     const guests = state.participants.filter((p) => currentRegistration(p)?.roomId === room.id);
@@ -1783,41 +1835,29 @@ function renderRooms() {
     </tr>`;
   }).join("");
   $("#accommodationContent").innerHTML = accommodationTab === "blocks" ? `
-    <div class="table-toolbar" data-table-controls="accommodation-blocks">
-      <label class="table-search"><span>Search</span><input type="search" data-table-search="accommodation-blocks" placeholder="Search blocks" value="${tableConfig("accommodation-blocks").search}"></label>
-      <label class="table-sort"><span>Sort</span><select data-table-sort="accommodation-blocks">${sortOptionsHtml("accommodation-blocks", [{ value: "nameAsc", label: "Block name" }, { value: "genderAsc", label: "Gender" }])}</select></label>
-    </div>
     <div class="table-wrap">
       <table>
         <thead><tr><th>Block</th><th>Gender</th><th>Floors</th><th>Rooms</th><th>Actions</th></tr></thead>
-        <tbody>${blockRows}</tbody>
+        <tbody id="accommodationBlockRows">${blockRows}</tbody>
       </table>
     </div>
-    <div class="pagination-bar" data-table-pagination="accommodation-blocks"></div>
   ` : `
-    <div class="table-toolbar" data-table-controls="accommodation-floors">
-      <label class="table-search"><span>Search Floors</span><input type="search" data-table-search="accommodation-floors" placeholder="Search floors" value="${tableConfig("accommodation-floors").search}"></label>
-      <label class="table-sort"><span>Sort</span><select data-table-sort="accommodation-floors">${sortOptionsHtml("accommodation-floors", [{ value: "nameAsc", label: "Floor name" }, { value: "blockAsc", label: "Block" }])}</select></label>
-    </div>
     <div class="table-wrap accommodation-subtable">
       <table>
         <thead><tr><th>Floor</th><th>Block</th><th>Rooms</th><th>Actions</th></tr></thead>
-        <tbody>${floorRows}</tbody>
+        <tbody id="accommodationFloorRows">${floorRows}</tbody>
       </table>
-    </div>
-    <div class="pagination-bar" data-table-pagination="accommodation-floors"></div>
-    <div class="table-toolbar" data-table-controls="accommodation-rooms">
-      <label class="table-search"><span>Search Rooms</span><input type="search" data-table-search="accommodation-rooms" placeholder="Search rooms" value="${tableConfig("accommodation-rooms").search}"></label>
-      <label class="table-sort"><span>Sort</span><select data-table-sort="accommodation-rooms">${sortOptionsHtml("accommodation-rooms", [{ value: "nameAsc", label: "Room name" }, { value: "blockAsc", label: "Block" }, { value: "bedsDesc", label: "Beds" }])}</select></label>
     </div>
     <div class="table-wrap">
       <table>
         <thead><tr><th>Room</th><th>Block</th><th>Floor</th><th>Type</th><th>Occupancy</th><th>Actions</th></tr></thead>
-        <tbody>${roomRows}</tbody>
+        <tbody id="accommodationRoomRows">${roomRows}</tbody>
       </table>
     </div>
-    <div class="pagination-bar" data-table-pagination="accommodation-rooms"></div>
   `;
+  ensureTableChrome("accommodationBlockRows", "accommodation-blocks", blockColumns);
+  ensureTableChrome("accommodationFloorRows", "accommodation-floors", floorColumns);
+  ensureTableChrome("accommodationRoomRows", "accommodation-rooms", roomColumns);
   renderTablePagination("accommodation-blocks", blockResult);
   renderTablePagination("accommodation-floors", floorResult);
   renderTablePagination("accommodation-rooms", roomResult);
@@ -1825,10 +1865,25 @@ function renderRooms() {
 }
 
 function renderHalls() {
-  const hallResult = tableRows("halls", state.halls, (hall) => [hall.name, hall.location, hall.notes], {
-    nameAsc: (a, b) => a.name.localeCompare(b.name),
-    capacityDesc: (a, b) => Number(b.capacity) - Number(a.capacity),
-    locationAsc: (a, b) => a.location.localeCompare(b.location)
+  const hallColumns = [
+    { key: "name", label: "Hall", value: (hall) => hall.name },
+    { key: "capacity", label: "Capacity", value: (hall) => Number(hall.capacity) },
+    { key: "location", label: "Location", value: (hall) => hall.location },
+    { key: "notes", label: "Notes", value: (hall) => hall.notes || "" },
+    { key: "actions", label: "Actions", value: () => "", sort: false, filter: false }
+  ];
+  const bookingColumns = [
+    { key: "program", label: "Program", value: (booking) => courseName(booking.courseId) },
+    { key: "hall", label: "Hall", value: (booking) => hallName(booking.hallId) },
+    { key: "start", label: "Dates", value: (booking) => `${booking.start} ${booking.end}` },
+    { key: "notes", label: "Notes", value: (booking) => booking.notes || "" },
+    { key: "actions", label: "Actions", value: () => "", sort: false, filter: false }
+  ];
+  const hallResult = tableRows("halls", state.halls, hallColumns, {
+    name: (a, b) => a.name.localeCompare(b.name),
+    capacity: (a, b) => Number(a.capacity) - Number(b.capacity),
+    location: (a, b) => a.location.localeCompare(b.location),
+    notes: (a, b) => (a.notes || "").localeCompare(b.notes || "")
   });
   const hallRows = hallResult.rows.map((hall) => `
     <tr>
@@ -1839,10 +1894,11 @@ function renderHalls() {
       <td><div class="row-actions"><button class="secondary-button" type="button" data-hall-edit="${hall.id}">Edit</button><button class="danger-button" type="button" data-hall-delete="${hall.id}">Delete</button></div></td>
     </tr>
   `).join("");
-  const bookingResult = tableRows("hall-bookings", state.hallBookings, (booking) => [courseName(booking.courseId), hallName(booking.hallId), booking.start, booking.end, booking.notes], {
-    programAsc: (a, b) => courseName(a.courseId).localeCompare(courseName(b.courseId)),
-    hallAsc: (a, b) => hallName(a.hallId).localeCompare(hallName(b.hallId)),
-    startAsc: (a, b) => dateFromInput(a.start) - dateFromInput(b.start)
+  const bookingResult = tableRows("hall-bookings", state.hallBookings, bookingColumns, {
+    program: (a, b) => courseName(a.courseId).localeCompare(courseName(b.courseId)),
+    hall: (a, b) => hallName(a.hallId).localeCompare(hallName(b.hallId)),
+    start: (a, b) => dateFromInput(a.start) - dateFromInput(b.start),
+    notes: (a, b) => (a.notes || "").localeCompare(b.notes || "")
   });
   const bookingRows = bookingResult.rows.map((booking) => `
     <tr>
@@ -1854,10 +1910,6 @@ function renderHalls() {
     </tr>
   `).join("");
   $("#hallContent").innerHTML = hallTab === "halls" ? `
-    <div class="table-toolbar" data-table-controls="halls">
-      <label class="table-search"><span>Search</span><input type="search" data-table-search="halls" placeholder="Search halls" value="${tableConfig("halls").search}"></label>
-      <label class="table-sort"><span>Sort</span><select data-table-sort="halls">${sortOptionsHtml("halls", [{ value: "nameAsc", label: "Hall name" }, { value: "capacityDesc", label: "Capacity" }, { value: "locationAsc", label: "Location" }])}</select></label>
-    </div>
     <div class="table-wrap">
       <table>
         <thead>
@@ -1869,15 +1921,10 @@ function renderHalls() {
             <th>Actions</th>
           </tr>
         </thead>
-        <tbody>${hallRows}</tbody>
+        <tbody id="hallRows">${hallRows}</tbody>
       </table>
     </div>
-    <div class="pagination-bar" data-table-pagination="halls"></div>
   ` : `
-    <div class="table-toolbar" data-table-controls="hall-bookings">
-      <label class="table-search"><span>Search</span><input type="search" data-table-search="hall-bookings" placeholder="Search bookings" value="${tableConfig("hall-bookings").search}"></label>
-      <label class="table-sort"><span>Sort</span><select data-table-sort="hall-bookings">${sortOptionsHtml("hall-bookings", [{ value: "startAsc", label: "Start date" }, { value: "programAsc", label: "Program" }, { value: "hallAsc", label: "Hall" }])}</select></label>
-    </div>
     <div class="table-wrap">
       <table>
         <thead>
@@ -1889,11 +1936,12 @@ function renderHalls() {
             <th>Actions</th>
           </tr>
         </thead>
-        <tbody>${bookingRows}</tbody>
+        <tbody id="hallBookingRows">${bookingRows}</tbody>
       </table>
     </div>
-    <div class="pagination-bar" data-table-pagination="hall-bookings"></div>
   `;
+  ensureTableChrome("hallRows", "halls", hallColumns);
+  ensureTableChrome("hallBookingRows", "hall-bookings", bookingColumns);
   renderTablePagination("halls", hallResult);
   renderTablePagination("hall-bookings", bookingResult);
   $$("#hallTabs button").forEach((button) => button.classList.toggle("is-selected", button.dataset.hallTab === hallTab));
@@ -1905,19 +1953,26 @@ function renderHallBookings() {
 
 function renderAccessManagement() {
   if (!$("#accessUserRows")) return;
-  ensureTableChrome("accessUserRows", "access-users", "Search users", [
-    { value: "nameAsc", label: "User name" },
-    { value: "roleAsc", label: "Role" },
-    { value: "statusAsc", label: "Status" }
-  ]);
-  ensureTableChrome("accessRoleRows", "access-roles", "Search roles", [
-    { value: "nameAsc", label: "Role name" },
-    { value: "statusAsc", label: "Status" }
-  ]);
-  const userResult = tableRows("access-users", accessUsers, (user) => [user.display_name, user.login_email, user.role_id, user.active ? "active" : "inactive"], {
-    nameAsc: (a, b) => a.display_name.localeCompare(b.display_name),
-    roleAsc: (a, b) => a.role_id.localeCompare(b.role_id),
-    statusAsc: (a, b) => String(b.active).localeCompare(String(a.active))
+  const userColumns = [
+    { key: "user", label: "User", value: (user) => `${user.display_name} ${user.login_email || ""}` },
+    { key: "role", label: "Role", value: (user) => roleById(user.role_id)?.name || user.role_id },
+    { key: "linked", label: "Linked Record", value: (user) => state.teachers.find((teacher) => teacher.id === user.linked_teacher_id)?.name || state.participants.find((participant) => participant.id === user.linked_participant_id)?.name || "" },
+    { key: "status", label: "Status", value: (user) => user.active ? "Active" : "Inactive" },
+    { key: "actions", label: "Actions", value: () => "", sort: false, filter: false }
+  ];
+  const roleColumns = [
+    { key: "role", label: "Role", value: (role) => `${role.name} ${role.id}` },
+    { key: "permissions", label: "Permissions", value: (role) => permissionsForRole(role).join(" ") || "View only" },
+    { key: "status", label: "Status", value: (role) => role.active ? "Active" : "Inactive" },
+    { key: "actions", label: "Actions", value: () => "", sort: false, filter: false }
+  ];
+  ensureTableChrome("accessUserRows", "access-users", userColumns);
+  ensureTableChrome("accessRoleRows", "access-roles", roleColumns);
+  const userResult = tableRows("access-users", accessUsers, userColumns, {
+    user: (a, b) => a.display_name.localeCompare(b.display_name),
+    role: (a, b) => (roleById(a.role_id)?.name || a.role_id).localeCompare(roleById(b.role_id)?.name || b.role_id),
+    linked: (a, b) => userColumns[2].value(a).localeCompare(userColumns[2].value(b)),
+    status: (a, b) => String(a.active).localeCompare(String(b.active))
   });
   $("#accessUserRows").innerHTML = userResult.rows.map((user) => {
     const role = roleById(user.role_id);
@@ -1945,9 +2000,10 @@ function renderAccessManagement() {
   }).join("") || `<tr><td colspan="5"><span class="muted">No app users configured yet.</span></td></tr>`;
   renderTablePagination("access-users", userResult);
 
-  const roleResult = tableRows("access-roles", accessRoles, (role) => [role.name, role.id, role.description, role.active ? "active" : "inactive"], {
-    nameAsc: (a, b) => a.name.localeCompare(b.name),
-    statusAsc: (a, b) => String(b.active).localeCompare(String(a.active))
+  const roleResult = tableRows("access-roles", accessRoles, roleColumns, {
+    role: (a, b) => a.name.localeCompare(b.name),
+    permissions: (a, b) => permissionsForRole(a).join(" ").localeCompare(permissionsForRole(b).join(" ")),
+    status: (a, b) => String(a.active).localeCompare(String(b.active))
   });
   $("#accessRoleRows").innerHTML = roleResult.rows.map((role) => {
     const permissions = permissionsForRole(role);
@@ -2735,26 +2791,28 @@ function bindEvents() {
     renderHalls();
   });
   document.body.addEventListener("input", (event) => {
-    const search = event.target.closest("[data-table-search]");
-    if (!search) return;
-    const key = search.dataset.tableSearch;
-    const cursor = search.selectionStart;
-    const stateForTable = tableConfig(search.dataset.tableSearch);
-    stateForTable.search = search.value;
+    const filter = event.target.closest("[data-column-filter]");
+    if (!filter) return;
+    const key = filter.dataset.columnFilter;
+    const columnKey = filter.dataset.columnKey;
+    const cursor = filter.selectionStart;
+    const stateForTable = tableConfig(key);
+    stateForTable.filters[columnKey] = filter.value;
     stateForTable.page = 1;
     renderAll();
     requestAnimationFrame(() => {
-      const nextSearch = document.querySelector(`[data-table-search="${key}"]`);
-      if (!nextSearch) return;
-      nextSearch.focus();
-      nextSearch.setSelectionRange(cursor, cursor);
+      const nextFilter = document.querySelector(`[data-column-filter="${key}"][data-column-key="${columnKey}"]`);
+      if (!nextFilter) return;
+      nextFilter.focus();
+      nextFilter.setSelectionRange(cursor, cursor);
     });
   });
-  document.body.addEventListener("change", (event) => {
-    const sort = event.target.closest("[data-table-sort]");
+  document.body.addEventListener("click", (event) => {
+    const sort = event.target.closest("[data-column-sort]");
     if (!sort) return;
-    const stateForTable = tableConfig(sort.dataset.tableSort);
-    stateForTable.sort = sort.value;
+    const stateForTable = tableConfig(sort.dataset.columnSort);
+    stateForTable.sort = sort.dataset.columnKey;
+    stateForTable.direction = sort.dataset.sortDirection;
     stateForTable.page = 1;
     renderAll();
   });
