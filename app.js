@@ -41,22 +41,33 @@ const tablePageSize = 8;
 const views = [
   ["portal", "Portal"],
   ["dashboard", "Dashboard"],
-  ["programs", "Courses"],
+  ["programs", "Course"],
   ["courses", "Programs"],
   ["teachers", "Teachers"],
-  ["participants", "Participants"],
   ["registrations", "Registrations"],
-  ["accommodation", "Accommodation"],
+  ["participants", "Participants"],
+  ["accommodation", "Accommodations"],
   ["halls", "Program Halls"],
-  ["access", "Users & Roles"],
-  ["certificates", "Certificates"]
+  ["certificates", "Certificates"],
+  ["access", "Users & Roles"]
+];
+
+const navViews = [
+  ["programs", "Course"],
+  ["courses", "Programs"],
+  ["registrations", "Registrations"],
+  ["participants", "Participants"],
+  ["accommodation", "Accommodations"],
+  ["halls", "Program Halls"],
+  ["certificates", "Certificates"],
+  ["access", "Users & Roles"]
 ];
 
 const roleViews = {
   public: [],
   participant: ["courses", "participants"],
-  teacher: ["dashboard", "courses", "teachers", "participants"],
-  admin: views.filter(([id]) => id !== "portal").map(([id]) => id)
+  teacher: ["courses", "participants", "teachers"],
+  admin: [...navViews.map(([id]) => id), "teachers", "dashboard"]
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -1313,14 +1324,23 @@ function newId(prefix) {
 
 function renderNav() {
   const permitted = allowedViews();
-  $("#nav").innerHTML = views
+  $("#nav").innerHTML = navViews
     .filter(([id]) => permitted.includes(id))
     .map(([id, label]) => `<button type="button" data-view="${id}" class="${id === currentViewId() ? "is-active" : ""}">${label}</button>`)
     .join("");
   $("#nav").onclick = (event) => {
     const button = event.target.closest("button[data-view]");
-    if (button) activateView(button.dataset.view);
+    if (!button) return;
+    resetRecordDetailViews();
+    linkBackStack = [];
+    if (button.dataset.view === "programs") courseMasterTab = "details";
+    activateView(button.dataset.view);
+    renderAll();
   };
+}
+
+function resetRecordDetailViews() {
+  openDetailView = { courses: false, programs: false, teachers: false, participants: false };
 }
 
 function activateView(id) {
