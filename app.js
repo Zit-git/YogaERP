@@ -31,6 +31,9 @@ let selectedTeacherId = "";
 let linkBackStack = [];
 let accommodationTab = "blocks";
 let hallTab = "halls";
+let openDetailView = { courses: false, teachers: false, participants: false };
+const tableState = {};
+const tablePageSize = 8;
 
 const views = [
   ["portal", "Portal"],
@@ -998,6 +1001,81 @@ function showToast(message) {
   showToast.timer = window.setTimeout(() => toast.classList.remove("is-visible"), 2400);
 }
 
+function tableConfig(key) {
+  tableState[key] ||= { search: "", sort: "", page: 1 };
+  return tableState[key];
+}
+
+function ensureTableChrome(tbodyId, key, placeholder, sortOptions = []) {
+  const tbody = $(`#${tbodyId}`);
+  if (!tbody) return;
+  const wrap = tbody.closest(".table-wrap");
+  if (!wrap) return;
+  if (!wrap.previousElementSibling?.matches(`[data-table-controls="${key}"]`)) {
+    wrap.insertAdjacentHTML("beforebegin", `
+      <div class="table-toolbar" data-table-controls="${key}">
+        <label class="table-search">
+          <span>Search</span>
+          <input type="search" data-table-search="${key}" placeholder="${placeholder}">
+        </label>
+        <label class="table-sort">
+          <span>Sort</span>
+          <select data-table-sort="${key}"></select>
+        </label>
+      </div>
+    `);
+  }
+  if (!wrap.nextElementSibling?.matches(`[data-table-pagination="${key}"]`)) {
+    wrap.insertAdjacentHTML("afterend", `<div class="pagination-bar" data-table-pagination="${key}"></div>`);
+  }
+  const stateForTable = tableConfig(key);
+  const searchInput = document.querySelector(`[data-table-search="${key}"]`);
+  const sortSelect = document.querySelector(`[data-table-sort="${key}"]`);
+  if (searchInput) searchInput.value = stateForTable.search;
+  if (sortSelect) {
+    sortSelect.innerHTML = sortOptions.map((option) => `<option value="${option.value}">${option.label}</option>`).join("");
+    sortSelect.value = stateForTable.sort || sortOptions[0]?.value || "";
+    stateForTable.sort = sortSelect.value;
+  }
+}
+
+function sortOptionsHtml(key, options) {
+  const selected = tableConfig(key).sort || options[0]?.value || "";
+  tableConfig(key).sort = selected;
+  return options.map((option) => `<option value="${option.value}" ${option.value === selected ? "selected" : ""}>${option.label}</option>`).join("");
+}
+
+function tableRows(key, rows, searchFields, sorters) {
+  const stateForTable = tableConfig(key);
+  const search = stateForTable.search.trim().toLowerCase();
+  let filtered = rows.filter((row) => !search || searchFields(row).join(" ").toLowerCase().includes(search));
+  const sorter = sorters[stateForTable.sort] || Object.values(sorters)[0];
+  if (sorter) filtered = [...filtered].sort(sorter);
+  const pageCount = Math.max(1, Math.ceil(filtered.length / tablePageSize));
+  stateForTable.page = Math.min(Math.max(1, stateForTable.page), pageCount);
+  const start = (stateForTable.page - 1) * tablePageSize;
+  return {
+    rows: filtered.slice(start, start + tablePageSize),
+    total: rows.length,
+    filtered: filtered.length,
+    pageCount,
+    page: stateForTable.page
+  };
+}
+
+function renderTablePagination(key, result) {
+  const pagination = document.querySelector(`[data-table-pagination="${key}"]`);
+  if (!pagination) return;
+  pagination.innerHTML = result.filtered ? `
+    <span>${(result.page - 1) * tablePageSize + 1}-${Math.min(result.page * tablePageSize, result.filtered)} of ${result.filtered}${result.filtered === result.total ? "" : ` filtered from ${result.total}`}</span>
+    <div class="row-actions">
+      <button class="secondary-button" type="button" data-table-page="${key}" data-page-direction="previous" ${result.page === 1 ? "disabled" : ""}>Previous</button>
+      <strong>Page ${result.page} / ${result.pageCount}</strong>
+      <button class="secondary-button" type="button" data-table-page="${key}" data-page-direction="next" ${result.page === result.pageCount ? "disabled" : ""}>Next</button>
+    </div>
+  ` : `<span>No matching records</span>`;
+}
+
 function newId(prefix) {
   if (crypto.randomUUID) return crypto.randomUUID();
   return `${prefix}-${Date.now()}-${Math.round(Math.random() * 10000)}`;
@@ -1053,6 +1131,9 @@ function openLinkedRecord(viewId, selections = {}, label = "Back") {
   if (selections.courseId) selectedCourseId = selections.courseId;
   if (selections.participantId) selectedParticipantId = selections.participantId;
   if (selections.teacherId) selectedTeacherId = selections.teacherId;
+  if (viewId === "courses") openDetailView.courses = true;
+  if (viewId === "teachers") openDetailView.teachers = true;
+  if (viewId === "participants") openDetailView.participants = true;
   activateView(viewId);
   renderAll();
 }
@@ -1204,7 +1285,21 @@ function renderCourses() {
   if (!selectedCourseId || !state.courses.some((course) => course.id === selectedCourseId)) {
     selectedCourseId = state.courses[0]?.id || "";
   }
-  $("#batchRows").innerHTML = state.courses.map((course) => {
+  const layout = document.querySelector(".batches-master-layout");
+  if (layout) layout.classList.toggle("detail-open", openDetailView.courses);
+  ensureTableChrome("batchRows", "courses", "Search programs", [
+    { value: "startAsc", label: "Start date" },
+    { value: "nameAsc", label: "Program name" },
+    { value: "teacherAsc", label: "Teacher" },
+    { value: "statusAsc", label: "Status" }
+  ]);
+  const result = tableRows("courses", state.courses, (course) => [course.name, course.teacher, course.hall, course.eligibility, course.status], {
+    startAsc: (a, b) => dateFromInput(a.start) - dateFromInput(b.start),
+    nameAsc: (a, b) => a.name.localeCompare(b.name),
+    teacherAsc: (a, b) => a.teacher.localeCompare(b.teacher),
+    statusAsc: (a, b) => (a.status || programLifecycleStatus(a)).localeCompare(b.status || programLifecycleStatus(b))
+  });
+  $("#batchRows").innerHTML = result.rows.map((course) => {
     const registered = allRegistrationRows().filter(({ registration }) => registration.courseId === course.id).length;
     const sessions = courseSessionPlan(course.id);
     const status = course.status || programLifecycleStatus(course);
@@ -1217,7 +1312,8 @@ function renderCourses() {
         <td>${course.hall}</td>
       </tr>
     `;
-  }).join("");
+  }).join("") || `<tr><td colspan="5"><span class="muted">No programs found.</span></td></tr>`;
+  renderTablePagination("courses", result);
   renderBatchDetail();
 }
 
@@ -1239,6 +1335,7 @@ function renderBatchDetail() {
   const showRegistrationAction = currentSession.role !== "participant" && status !== "Completed";
   const allowAttendance = canMarkAttendance();
   $("#batchDetail").innerHTML = `
+    <button class="secondary-button link-back-button" type="button" data-record-back="courses">Back to Programs</button>
     ${backLinkHtml()}
     <div class="batch-detail-heading">
       <div>
@@ -1342,7 +1439,17 @@ function renderPrograms() {
     </div>`;
   };
   $("#programHierarchy").innerHTML = childrenFor("").map(renderNode).join("");
-  $("#programRows").innerHTML = state.programs.map((program) => `
+  ensureTableChrome("programRows", "programs", "Search course master", [
+    { value: "nameAsc", label: "Course name" },
+    { value: "codeAsc", label: "Code" },
+    { value: "levelAsc", label: "Level" }
+  ]);
+  const result = tableRows("programs", state.programs, (program) => [program.name, program.code, program.level, program.eligibility], {
+    nameAsc: (a, b) => a.name.localeCompare(b.name),
+    codeAsc: (a, b) => a.code.localeCompare(b.code),
+    levelAsc: (a, b) => a.level.localeCompare(b.level)
+  });
+  $("#programRows").innerHTML = result.rows.map((program) => `
     <tr>
       <td><strong>${program.name}</strong><br><span class="muted">${program.parentId ? `Under ${state.programs.find((item) => item.id === program.parentId)?.name || "Root"}` : "Root course family"}</span></td>
       <td>${program.code}</td>
@@ -1371,7 +1478,8 @@ function renderPrograms() {
         `).join("") || "<span class=\"muted\">No sessions planned.</span>"}
       </div>
     </td></tr>` : ""}
-  `).join("");
+  `).join("") || `<tr><td colspan="6"><span class="muted">No courses found.</span></td></tr>`;
+  renderTablePagination("programs", result);
 }
 
 function renderTeachers() {
@@ -1381,7 +1489,19 @@ function renderTeachers() {
   if (!selectedTeacherId || !teachers.some((teacher) => teacher.id === selectedTeacherId)) {
     selectedTeacherId = teachers[0]?.id || "";
   }
-  $("#teacherRows").innerHTML = teachers.map((teacher) => {
+  const layout = document.querySelector(".teachers-master-layout");
+  if (layout) layout.classList.toggle("detail-open", openDetailView.teachers);
+  ensureTableChrome("teacherRows", "teachers", "Search teachers", [
+    { value: "nameAsc", label: "Teacher name" },
+    { value: "specialityAsc", label: "Speciality" },
+    { value: "programsDesc", label: "Programs conducted" }
+  ]);
+  const result = tableRows("teachers", teachers, (teacher) => [teacher.name, teacher.email, teacher.phone, teacher.speciality], {
+    nameAsc: (a, b) => a.name.localeCompare(b.name),
+    specialityAsc: (a, b) => a.speciality.localeCompare(b.speciality),
+    programsDesc: (a, b) => state.courses.filter((course) => course.teacher === b.name).length - state.courses.filter((course) => course.teacher === a.name).length
+  });
+  $("#teacherRows").innerHTML = result.rows.map((teacher) => {
     const programs = state.courses.filter((course) => course.teacher === teacher.name);
     return `
       <tr class="teacher-master-row ${teacher.id === selectedTeacherId ? "participant-row-selected" : ""}" data-teacher-view="${teacher.id}" tabindex="0">
@@ -1396,7 +1516,8 @@ function renderTeachers() {
         </td>
       </tr>
     `;
-  }).join("");
+  }).join("") || `<tr><td colspan="5"><span class="muted">No teachers found.</span></td></tr>`;
+  renderTablePagination("teachers", result);
   const selected = teachers.find((teacher) => teacher.id === selectedTeacherId);
   if (!selected) {
     $("#teacherDetail").innerHTML = `<p class="muted">No teachers recorded yet.</p>`;
@@ -1404,6 +1525,7 @@ function renderTeachers() {
   }
   const conducted = state.courses.filter((course) => course.teacher === selected.name);
   $("#teacherDetail").innerHTML = `
+    <button class="secondary-button link-back-button" type="button" data-record-back="teachers">Back to Teachers</button>
     ${backLinkHtml()}
     <div class="profile-card">
       <img class="profile-photo" src="${teacherPhoto(selected)}" alt="${selected.name} profile photo">
@@ -1461,7 +1583,22 @@ function renderParticipantsMaster() {
   if (!selectedParticipantId || !participants.some((participant) => participant.id === selectedParticipantId)) {
     selectedParticipantId = participants[0]?.id || "";
   }
-  $("#participantMasterRows").innerHTML = participants.map((participant) => {
+  const layout = document.querySelector(".participants-master-layout");
+  if (layout) layout.classList.toggle("detail-open", openDetailView.participants);
+  ensureTableChrome("participantMasterRows", "participants", "Search participants", [
+    { value: "nameAsc", label: "Participant name" },
+    { value: "programAsc", label: "Program" },
+    { value: "completionAsc", label: "Completion" }
+  ]);
+  const result = tableRows("participants", participants, (participant) => {
+    const registration = currentRegistration(participant);
+    return [participant.name, participant.email, participant.phone, participant.gender, courseName(registration.courseId), registration.completion, roomName(registration.roomId)];
+  }, {
+    nameAsc: (a, b) => a.name.localeCompare(b.name),
+    programAsc: (a, b) => courseName(currentRegistration(a).courseId).localeCompare(courseName(currentRegistration(b).courseId)),
+    completionAsc: (a, b) => currentRegistration(a).completion.localeCompare(currentRegistration(b).completion)
+  });
+  $("#participantMasterRows").innerHTML = result.rows.map((participant) => {
     const registration = currentRegistration(participant);
     const batch = batchForParticipant(participant);
     const courseMaster = courseMasterForBatch(batch);
@@ -1474,7 +1611,8 @@ function renderParticipantsMaster() {
         <td>${roomName(registration.roomId)}<br><span class="muted">${registration.checkedIn ? "Checked in" : "Not checked in"}</span></td>
       </tr>
     `;
-  }).join("");
+  }).join("") || `<tr><td colspan="4"><span class="muted">No participants found.</span></td></tr>`;
+  renderTablePagination("participants", result);
 
   const selected = participants.find((participant) => participant.id === selectedParticipantId);
   if (!selected) {
@@ -1488,6 +1626,7 @@ function renderParticipantsMaster() {
   const registration = currentRegistration(selected);
   const programsAttended = participantProgramHistory(selected);
   $("#participantDetail").innerHTML = `
+    <button class="secondary-button link-back-button" type="button" data-record-back="participants">Back to Participants</button>
     ${backLinkHtml()}
     <div class="profile-card">
       <img class="profile-photo" src="${participantPhoto(selected)}" alt="${selected.name} profile photo">
@@ -1563,13 +1702,21 @@ function renderParticipantsMaster() {
 }
 
 function renderRegistrations() {
-  const search = ($("#globalSearch")?.value || "").trim().toLowerCase();
   let rows = visibleRegistrationRows().filter(({ registration }) => currentFilter === "all" || registration.status === currentFilter);
-  if (search) {
-    rows = rows.filter(({ participant, registration }) => [participant.name, participant.email, participant.phone, participant.id, courseName(registration.courseId), roomName(registration.roomId)].join(" ").toLowerCase().includes(search));
-  }
+  ensureTableChrome("participantRows", "registrations", "Search registrations", [
+    { value: "nameAsc", label: "Participant name" },
+    { value: "programAsc", label: "Program" },
+    { value: "statusAsc", label: "Status" },
+    { value: "dateDesc", label: "Registration date" }
+  ]);
+  const result = tableRows("registrations", rows, ({ participant, registration }) => [participant.name, participant.email, participant.phone, participant.id, courseName(registration.courseId), registration.status, roomName(registration.roomId)], {
+    nameAsc: (a, b) => a.participant.name.localeCompare(b.participant.name),
+    programAsc: (a, b) => courseName(a.registration.courseId).localeCompare(courseName(b.registration.courseId)),
+    statusAsc: (a, b) => a.registration.status.localeCompare(b.registration.status),
+    dateDesc: (a, b) => (b.registration.registeredOn || "").localeCompare(a.registration.registeredOn || "")
+  });
   const showActions = canReviewRegistrations();
-  $("#participantRows").innerHTML = rows.map(({ participant, registration }) => `
+  $("#participantRows").innerHTML = result.rows.map(({ participant, registration }) => `
     <tr>
       <td><strong><button class="text-link-button" type="button" data-linked-participant="${participant.id}">${participant.name}</button></strong><br><span class="muted">${participant.id} | ${participant.phone}</span></td>
       <td><button class="text-link-button" type="button" data-linked-batch="${registration.courseId}">${courseName(registration.courseId)}</button><br><span class="muted">${registration.registeredOn || "Registration date not set"}</span></td>
@@ -1586,11 +1733,16 @@ function renderRegistrations() {
         `}
       </td>
     </tr>
-  `).join("");
+  `).join("") || `<tr><td colspan="6"><span class="muted">No registrations found.</span></td></tr>`;
+  renderTablePagination("registrations", result);
 }
 
 function renderRooms() {
-  const blockRows = state.blocks.map((block) => {
+  const blockResult = tableRows("accommodation-blocks", state.blocks, (block) => [block.name, block.gender, block.notes], {
+    nameAsc: (a, b) => a.name.localeCompare(b.name),
+    genderAsc: (a, b) => a.gender.localeCompare(b.gender)
+  });
+  const blockRows = blockResult.rows.map((block) => {
     const floors = state.floors.filter((floor) => floor.blockId === block.id).length;
     const rooms = state.rooms.filter((room) => room.blockId === block.id).length;
     return `<tr>
@@ -1601,7 +1753,11 @@ function renderRooms() {
       <td><div class="row-actions"><button class="secondary-button" type="button" data-block-edit="${block.id}">Edit</button><button class="danger-button" type="button" data-block-delete="${block.id}">Delete</button></div></td>
     </tr>`;
   }).join("");
-  const floorRows = state.floors.map((floor) => `
+  const floorResult = tableRows("accommodation-floors", state.floors, (floor) => [floor.name, blockName(floor.blockId)], {
+    nameAsc: (a, b) => a.name.localeCompare(b.name),
+    blockAsc: (a, b) => blockName(a.blockId).localeCompare(blockName(b.blockId))
+  });
+  const floorRows = floorResult.rows.map((floor) => `
     <tr>
       <td><strong>${floor.name}</strong></td>
       <td>${blockName(floor.blockId)}</td>
@@ -1609,7 +1765,12 @@ function renderRooms() {
       <td><div class="row-actions"><button class="secondary-button" type="button" data-floor-edit="${floor.id}">Edit</button><button class="danger-button" type="button" data-floor-delete="${floor.id}">Delete</button></div></td>
     </tr>
   `).join("");
-  const roomRows = state.rooms.map((room) => {
+  const roomResult = tableRows("accommodation-rooms", state.rooms, (room) => [room.name, blockName(room.blockId), floorName(room.floorId), room.gender], {
+    nameAsc: (a, b) => a.name.localeCompare(b.name),
+    blockAsc: (a, b) => blockName(a.blockId).localeCompare(blockName(b.blockId)),
+    bedsDesc: (a, b) => Number(b.beds) - Number(a.beds)
+  });
+  const roomRows = roomResult.rows.map((room) => {
     const guests = state.participants.filter((p) => currentRegistration(p)?.roomId === room.id);
     const percent = Math.round((guests.length / room.beds) * 100);
     return `<tr>
@@ -1622,18 +1783,32 @@ function renderRooms() {
     </tr>`;
   }).join("");
   $("#accommodationContent").innerHTML = accommodationTab === "blocks" ? `
+    <div class="table-toolbar" data-table-controls="accommodation-blocks">
+      <label class="table-search"><span>Search</span><input type="search" data-table-search="accommodation-blocks" placeholder="Search blocks" value="${tableConfig("accommodation-blocks").search}"></label>
+      <label class="table-sort"><span>Sort</span><select data-table-sort="accommodation-blocks">${sortOptionsHtml("accommodation-blocks", [{ value: "nameAsc", label: "Block name" }, { value: "genderAsc", label: "Gender" }])}</select></label>
+    </div>
     <div class="table-wrap">
       <table>
         <thead><tr><th>Block</th><th>Gender</th><th>Floors</th><th>Rooms</th><th>Actions</th></tr></thead>
         <tbody>${blockRows}</tbody>
       </table>
     </div>
+    <div class="pagination-bar" data-table-pagination="accommodation-blocks"></div>
   ` : `
+    <div class="table-toolbar" data-table-controls="accommodation-floors">
+      <label class="table-search"><span>Search Floors</span><input type="search" data-table-search="accommodation-floors" placeholder="Search floors" value="${tableConfig("accommodation-floors").search}"></label>
+      <label class="table-sort"><span>Sort</span><select data-table-sort="accommodation-floors">${sortOptionsHtml("accommodation-floors", [{ value: "nameAsc", label: "Floor name" }, { value: "blockAsc", label: "Block" }])}</select></label>
+    </div>
     <div class="table-wrap accommodation-subtable">
       <table>
         <thead><tr><th>Floor</th><th>Block</th><th>Rooms</th><th>Actions</th></tr></thead>
         <tbody>${floorRows}</tbody>
       </table>
+    </div>
+    <div class="pagination-bar" data-table-pagination="accommodation-floors"></div>
+    <div class="table-toolbar" data-table-controls="accommodation-rooms">
+      <label class="table-search"><span>Search Rooms</span><input type="search" data-table-search="accommodation-rooms" placeholder="Search rooms" value="${tableConfig("accommodation-rooms").search}"></label>
+      <label class="table-sort"><span>Sort</span><select data-table-sort="accommodation-rooms">${sortOptionsHtml("accommodation-rooms", [{ value: "nameAsc", label: "Room name" }, { value: "blockAsc", label: "Block" }, { value: "bedsDesc", label: "Beds" }])}</select></label>
     </div>
     <div class="table-wrap">
       <table>
@@ -1641,12 +1816,21 @@ function renderRooms() {
         <tbody>${roomRows}</tbody>
       </table>
     </div>
+    <div class="pagination-bar" data-table-pagination="accommodation-rooms"></div>
   `;
+  renderTablePagination("accommodation-blocks", blockResult);
+  renderTablePagination("accommodation-floors", floorResult);
+  renderTablePagination("accommodation-rooms", roomResult);
   $$("#accommodationTabs button").forEach((button) => button.classList.toggle("is-selected", button.dataset.accommodationTab === accommodationTab));
 }
 
 function renderHalls() {
-  const hallRows = state.halls.map((hall) => `
+  const hallResult = tableRows("halls", state.halls, (hall) => [hall.name, hall.location, hall.notes], {
+    nameAsc: (a, b) => a.name.localeCompare(b.name),
+    capacityDesc: (a, b) => Number(b.capacity) - Number(a.capacity),
+    locationAsc: (a, b) => a.location.localeCompare(b.location)
+  });
+  const hallRows = hallResult.rows.map((hall) => `
     <tr>
       <td><strong>${hall.name}</strong></td>
       <td>${hall.capacity}</td>
@@ -1655,7 +1839,12 @@ function renderHalls() {
       <td><div class="row-actions"><button class="secondary-button" type="button" data-hall-edit="${hall.id}">Edit</button><button class="danger-button" type="button" data-hall-delete="${hall.id}">Delete</button></div></td>
     </tr>
   `).join("");
-  const bookingRows = state.hallBookings.map((booking) => `
+  const bookingResult = tableRows("hall-bookings", state.hallBookings, (booking) => [courseName(booking.courseId), hallName(booking.hallId), booking.start, booking.end, booking.notes], {
+    programAsc: (a, b) => courseName(a.courseId).localeCompare(courseName(b.courseId)),
+    hallAsc: (a, b) => hallName(a.hallId).localeCompare(hallName(b.hallId)),
+    startAsc: (a, b) => dateFromInput(a.start) - dateFromInput(b.start)
+  });
+  const bookingRows = bookingResult.rows.map((booking) => `
     <tr>
       <td><button class="text-link-button" type="button" data-linked-batch="${booking.courseId}">${courseName(booking.courseId)}</button></td>
       <td>${hallName(booking.hallId)}</td>
@@ -1665,6 +1854,10 @@ function renderHalls() {
     </tr>
   `).join("");
   $("#hallContent").innerHTML = hallTab === "halls" ? `
+    <div class="table-toolbar" data-table-controls="halls">
+      <label class="table-search"><span>Search</span><input type="search" data-table-search="halls" placeholder="Search halls" value="${tableConfig("halls").search}"></label>
+      <label class="table-sort"><span>Sort</span><select data-table-sort="halls">${sortOptionsHtml("halls", [{ value: "nameAsc", label: "Hall name" }, { value: "capacityDesc", label: "Capacity" }, { value: "locationAsc", label: "Location" }])}</select></label>
+    </div>
     <div class="table-wrap">
       <table>
         <thead>
@@ -1679,7 +1872,12 @@ function renderHalls() {
         <tbody>${hallRows}</tbody>
       </table>
     </div>
+    <div class="pagination-bar" data-table-pagination="halls"></div>
   ` : `
+    <div class="table-toolbar" data-table-controls="hall-bookings">
+      <label class="table-search"><span>Search</span><input type="search" data-table-search="hall-bookings" placeholder="Search bookings" value="${tableConfig("hall-bookings").search}"></label>
+      <label class="table-sort"><span>Sort</span><select data-table-sort="hall-bookings">${sortOptionsHtml("hall-bookings", [{ value: "startAsc", label: "Start date" }, { value: "programAsc", label: "Program" }, { value: "hallAsc", label: "Hall" }])}</select></label>
+    </div>
     <div class="table-wrap">
       <table>
         <thead>
@@ -1694,7 +1892,10 @@ function renderHalls() {
         <tbody>${bookingRows}</tbody>
       </table>
     </div>
+    <div class="pagination-bar" data-table-pagination="hall-bookings"></div>
   `;
+  renderTablePagination("halls", hallResult);
+  renderTablePagination("hall-bookings", bookingResult);
   $$("#hallTabs button").forEach((button) => button.classList.toggle("is-selected", button.dataset.hallTab === hallTab));
 }
 
@@ -1704,7 +1905,21 @@ function renderHallBookings() {
 
 function renderAccessManagement() {
   if (!$("#accessUserRows")) return;
-  $("#accessUserRows").innerHTML = accessUsers.map((user) => {
+  ensureTableChrome("accessUserRows", "access-users", "Search users", [
+    { value: "nameAsc", label: "User name" },
+    { value: "roleAsc", label: "Role" },
+    { value: "statusAsc", label: "Status" }
+  ]);
+  ensureTableChrome("accessRoleRows", "access-roles", "Search roles", [
+    { value: "nameAsc", label: "Role name" },
+    { value: "statusAsc", label: "Status" }
+  ]);
+  const userResult = tableRows("access-users", accessUsers, (user) => [user.display_name, user.login_email, user.role_id, user.active ? "active" : "inactive"], {
+    nameAsc: (a, b) => a.display_name.localeCompare(b.display_name),
+    roleAsc: (a, b) => a.role_id.localeCompare(b.role_id),
+    statusAsc: (a, b) => String(b.active).localeCompare(String(a.active))
+  });
+  $("#accessUserRows").innerHTML = userResult.rows.map((user) => {
     const role = roleById(user.role_id);
     const linkedTeacher = state.teachers.find((teacher) => teacher.id === user.linked_teacher_id);
     const linkedParticipant = state.participants.find((participant) => participant.id === user.linked_participant_id);
@@ -1728,8 +1943,13 @@ function renderAccessManagement() {
       </tr>
     `;
   }).join("") || `<tr><td colspan="5"><span class="muted">No app users configured yet.</span></td></tr>`;
+  renderTablePagination("access-users", userResult);
 
-  $("#accessRoleRows").innerHTML = accessRoles.map((role) => {
+  const roleResult = tableRows("access-roles", accessRoles, (role) => [role.name, role.id, role.description, role.active ? "active" : "inactive"], {
+    nameAsc: (a, b) => a.name.localeCompare(b.name),
+    statusAsc: (a, b) => String(b.active).localeCompare(String(a.active))
+  });
+  $("#accessRoleRows").innerHTML = roleResult.rows.map((role) => {
     const permissions = permissionsForRole(role);
     const assigned = accessUsers.filter((user) => user.role_id === role.id).length;
     return `
@@ -1750,6 +1970,7 @@ function renderAccessManagement() {
       </tr>
     `;
   }).join("") || `<tr><td colspan="4"><span class="muted">No roles configured yet.</span></td></tr>`;
+  renderTablePagination("access-roles", roleResult);
 
   $("#accessUserRoleSelect").innerHTML = accessRoles
     .filter((role) => role.active)
@@ -2513,6 +2734,30 @@ function bindEvents() {
     hallTab = button.dataset.hallTab;
     renderHalls();
   });
+  document.body.addEventListener("input", (event) => {
+    const search = event.target.closest("[data-table-search]");
+    if (!search) return;
+    const key = search.dataset.tableSearch;
+    const cursor = search.selectionStart;
+    const stateForTable = tableConfig(search.dataset.tableSearch);
+    stateForTable.search = search.value;
+    stateForTable.page = 1;
+    renderAll();
+    requestAnimationFrame(() => {
+      const nextSearch = document.querySelector(`[data-table-search="${key}"]`);
+      if (!nextSearch) return;
+      nextSearch.focus();
+      nextSearch.setSelectionRange(cursor, cursor);
+    });
+  });
+  document.body.addEventListener("change", (event) => {
+    const sort = event.target.closest("[data-table-sort]");
+    if (!sort) return;
+    const stateForTable = tableConfig(sort.dataset.tableSort);
+    stateForTable.sort = sort.value;
+    stateForTable.page = 1;
+    renderAll();
+  });
   $("#loginForm").addEventListener("submit", async (event) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
@@ -2615,6 +2860,20 @@ function bindEvents() {
       if (previous) restoreSelectionState(previous);
       return;
     }
+    const recordBack = event.target.closest("[data-record-back]");
+    if (recordBack) {
+      openDetailView[recordBack.dataset.recordBack] = false;
+      linkBackStack = [];
+      renderAll();
+      return;
+    }
+    const tablePage = event.target.closest("[data-table-page]");
+    if (tablePage) {
+      const stateForTable = tableConfig(tablePage.dataset.tablePage);
+      stateForTable.page += tablePage.dataset.pageDirection === "next" ? 1 : -1;
+      renderAll();
+      return;
+    }
     const linkedTeacher = event.target.closest("[data-linked-teacher]");
     if (linkedTeacher) {
       if (!canAccessView("teachers")) {
@@ -2641,6 +2900,7 @@ function bindEvents() {
     const batchView = event.target.closest("[data-batch-view]");
     if (batchView) {
       selectedCourseId = batchView.dataset.batchView;
+      openDetailView.courses = true;
       renderCourses();
       return;
     }
@@ -2769,12 +3029,14 @@ function bindEvents() {
     const teacherView = event.target.closest("[data-teacher-view]");
     if (teacherView && !event.target.closest("button")) {
       selectedTeacherId = teacherView.dataset.teacherView;
+      openDetailView.teachers = true;
       renderTeachers();
       return;
     }
     const participantView = event.target.closest("[data-participant-view]");
     if (participantView) {
       selectedParticipantId = participantView.dataset.participantView;
+      openDetailView.participants = true;
       renderParticipantsMaster();
       return;
     }
@@ -2819,6 +3081,7 @@ function bindEvents() {
     if (batchView) {
       event.preventDefault();
       selectedCourseId = batchView.dataset.batchView;
+      openDetailView.courses = true;
       renderCourses();
       return;
     }
@@ -2826,6 +3089,7 @@ function bindEvents() {
     if (teacherView) {
       event.preventDefault();
       selectedTeacherId = teacherView.dataset.teacherView;
+      openDetailView.teachers = true;
       renderTeachers();
       return;
     }
@@ -2833,6 +3097,7 @@ function bindEvents() {
     if (!participantView) return;
     event.preventDefault();
     selectedParticipantId = participantView.dataset.participantView;
+    openDetailView.participants = true;
     renderParticipantsMaster();
   });
   $("#registrationForm").addEventListener("submit", (event) => {
