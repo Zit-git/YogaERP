@@ -411,7 +411,15 @@
           </div>
           <button class="icon-button" id="closeRegistration" value="cancel" aria-label="Close" type="button">x</button>
         </div>
-        <div class="form-grid">
+        <div class="form-grid registration-program-grid">
+          <label class="wide">Program<select name="course" id="courseSelect"></select></label>
+        </div>
+        <div class="segmented subnav registration-mode-tabs" id="registrationModeTabs">
+          <button class="is-selected" data-registration-mode="individual" type="button">Individual</button>
+          <button data-registration-mode="bulk" type="button">Bulk</button>
+        </div>
+        <input type="hidden" name="registrationMode" id="registrationMode" value="individual">
+        <div class="form-grid" id="individualRegistrationFields">
           <label>Name<input name="name" required></label>
           <label>Age<input name="age" type="number" min="12" max="100" required></label>
           <label>Gender
@@ -421,7 +429,6 @@
               <option>Other</option>
             </select>
           </label>
-          <label>Program<select name="course" id="courseSelect"></select></label>
           <label>Phone<input name="phone" required></label>
           <label>Email<input name="email" type="email" required></label>
           <label>Photo URL<input name="photo" type="url" placeholder="Optional profile photo link"></label>
@@ -429,6 +436,16 @@
           <label class="wide">Address<textarea name="address" rows="2" placeholder="City, state, country"></textarea></label>
           <label class="wide">Health Notes<textarea name="notes" rows="3" placeholder="Existing conditions, dietary needs, prior yoga experience"></textarea></label>
         </div>
+        <section class="bulk-registration-panel" id="bulkRegistrationFields" hidden>
+          <div class="subform-header">
+            <div>
+              <h3>Participants</h3>
+              <span class="muted">Capture complete details for each registrant</span>
+            </div>
+            <button class="secondary-button" id="addBulkRegistrant" type="button">Add Person</button>
+          </div>
+          <div id="bulkRegistrantRows" class="bulk-registrant-list"></div>
+        </section>
         <menu>
           <button class="secondary-button" id="cancelRegistration" value="cancel" type="button">Cancel</button>
           <button class="primary-button" value="default" type="submit">Submit Registration</button>
@@ -650,6 +667,6 @@
     <div id="toast" role="status" aria-live="polite"></div>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="supabase-config.js?v=35"></script>
-    <script src="app.js?v=67"></script>
+    <script src="app.js?v=68"></script>
   </body>
 </html>

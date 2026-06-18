@@ -881,6 +881,66 @@ function currentParticipant() {
   return state.participants.find((participant) => participant.id === currentSession.id) || null;
 }
 
+function registrationPayloadForCourse(courseId, notes = "") {
+  return {
+    id: newId("registration"),
+    courseId,
+    status: "Pending",
+    eligible: false,
+    roomId: "",
+    checkedIn: false,
+    attendance: 0,
+    completion: "Pending",
+    certificate: false,
+    sessionAttendance: [],
+    notes,
+    registeredOn: new Date().toISOString().slice(0, 10)
+  };
+}
+
+function registerParticipantForCourse(details, courseId) {
+  const phone = details.phone.trim();
+  const registration = registrationPayloadForCourse(courseId, details.notes || "");
+  let participant = state.participants.find((item) => item.phone === phone || item.id === phone);
+  if (participant) {
+    participant.name = details.name.trim() || participant.name;
+    participant.age = Number(details.age) || participant.age;
+    participant.gender = details.gender || participant.gender;
+    participant.email = details.email.trim() || participant.email;
+    participant.photo = (details.photo || "").trim() || participant.photo || "";
+    participant.address = (details.address || "").trim() || participant.address || "";
+    participant.emergencyContact = (details.emergencyContact || "").trim() || participant.emergencyContact || "";
+    participant.notes = details.notes || participant.notes || "";
+    registrationsForParticipant(participant).push(registration);
+    syncParticipantFromRegistration(participant, registration);
+    return participant;
+  }
+  participant = {
+    id: newId("participant"),
+    name: details.name.trim(),
+    age: Number(details.age),
+    gender: details.gender,
+    courseId,
+    phone,
+    email: details.email.trim(),
+    photo: (details.photo || "").trim(),
+    address: (details.address || "").trim(),
+    emergencyContact: (details.emergencyContact || "").trim(),
+    status: registration.status,
+    eligible: registration.eligible,
+    roomId: registration.roomId,
+    checkedIn: registration.checkedIn,
+    attendance: registration.attendance,
+    completion: registration.completion,
+    certificate: registration.certificate,
+    programHistory: [],
+    notes: details.notes || "",
+    registrations: [registration]
+  };
+  state.participants.push(participant);
+  return participant;
+}
+
 function visibleParticipants() {
   const participant = currentParticipant();
   return participant ? [participant] : state.participants;
@@ -1169,6 +1229,74 @@ function renderBulkValueInput(key) {
     ? `<select name="value" required>${(field.options || []).map((option) => `<option value="${option.value}">${option.label}</option>`).join("")}</select>`
     : `<input name="value" type="${field.type}" required>`;
   $("#bulkEditValue").innerHTML = `<label>${field.label}${control}</label>`;
+}
+
+function setRegistrationMode(mode) {
+  const isBulk = mode === "bulk";
+  $("#registrationMode").value = isBulk ? "bulk" : "individual";
+  $("#individualRegistrationFields").hidden = isBulk;
+  $("#bulkRegistrationFields").hidden = !isBulk;
+  $$("#registrationModeTabs button").forEach((button) => button.classList.toggle("is-selected", button.dataset.registrationMode === $("#registrationMode").value));
+  $$("#individualRegistrationFields input, #individualRegistrationFields select, #individualRegistrationFields textarea").forEach((field) => {
+    if (field.name === "photo" || field.name === "emergencyContact" || field.name === "address" || field.name === "notes") return;
+    field.required = !isBulk;
+  });
+  $$("#bulkRegistrantRows input, #bulkRegistrantRows select, #bulkRegistrantRows textarea").forEach((field) => {
+    const requiredBulkFields = ["name", "age", "gender", "phone", "email"];
+    field.required = isBulk && requiredBulkFields.includes(field.dataset.bulkField);
+  });
+  if (isBulk && !document.querySelector(".bulk-registrant-row")) addBulkRegistrantRow();
+}
+
+function addBulkRegistrantRow(values = {}) {
+  const rowId = newId("bulkRegistrant");
+  $("#bulkRegistrantRows").insertAdjacentHTML("beforeend", `
+    <div class="bulk-registrant-row" data-bulk-registrant-row="${rowId}">
+      <div class="bulk-registrant-heading">
+        <strong>Registrant</strong>
+        <button class="icon-button" type="button" data-remove-bulk-registrant="${rowId}" aria-label="Remove registrant">x</button>
+      </div>
+      <div class="form-grid">
+        <label>Name<input data-bulk-field="name" value="${values.name || ""}" required></label>
+        <label>Age<input data-bulk-field="age" type="number" min="12" max="100" value="${values.age || ""}" required></label>
+        <label>Gender
+          <select data-bulk-field="gender" required>
+            ${["Female", "Male", "Other"].map((gender) => `<option ${gender === (values.gender || "Female") ? "selected" : ""}>${gender}</option>`).join("")}
+          </select>
+        </label>
+        <label>Phone<input data-bulk-field="phone" value="${values.phone || ""}" required></label>
+        <label>Email<input data-bulk-field="email" type="email" value="${values.email || ""}" required></label>
+        <label>Emergency Contact<input data-bulk-field="emergencyContact" value="${values.emergencyContact || ""}"></label>
+        <label class="wide">Address<textarea data-bulk-field="address" rows="2">${values.address || ""}</textarea></label>
+        <label class="wide">Health Notes<textarea data-bulk-field="notes" rows="2">${values.notes || ""}</textarea></label>
+      </div>
+    </div>
+  `);
+}
+
+function bulkRegistrantDetails() {
+  return $$(".bulk-registrant-row").map((row) => {
+    const valueFor = (field) => row.querySelector(`[data-bulk-field="${field}"]`)?.value || "";
+    return {
+      name: valueFor("name"),
+      age: valueFor("age"),
+      gender: valueFor("gender"),
+      phone: valueFor("phone"),
+      email: valueFor("email"),
+      photo: "",
+      emergencyContact: valueFor("emergencyContact"),
+      address: valueFor("address"),
+      notes: valueFor("notes")
+    };
+  }).filter((item) => item.name.trim() || item.phone.trim() || item.email.trim());
+}
+
+function openRegistrationDialog(courseId = "") {
+  $("#registrationForm").reset();
+  $("#bulkRegistrantRows").innerHTML = "";
+  if (courseId) $("#courseSelect").value = courseId;
+  setRegistrationMode("individual");
+  $("#registrationDialog").showModal();
 }
 
 async function applyBulkEdit(form) {
@@ -3129,7 +3257,9 @@ function deleteProgram(programId) {
 function bindEvents() {
   $("#addCourse").addEventListener("click", () => canManageMasters() && $("#courseDialog").showModal());
   $("#addProgram").addEventListener("click", () => canManageMasters() && openProgramDialog());
-  $("#addParticipantFromMaster").addEventListener("click", () => $("#registrationDialog").showModal());
+  $("#addParticipantFromMaster").addEventListener("click", () => {
+    openRegistrationDialog();
+  });
   $("#forgotPasswordButton").addEventListener("click", () => $("#forgotPasswordDialog").showModal());
   $("#previousMonth").addEventListener("click", () => {
     calendarDate = new Date(calendarDate.getFullYear(), calendarDate.getMonth() - 1, 1);
@@ -3189,6 +3319,12 @@ function bindEvents() {
     $$("#registrationFilter button").forEach((item) => item.classList.toggle("is-selected", item === button));
     renderRegistrations();
   });
+  $("#registrationModeTabs").addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-registration-mode]");
+    if (!button) return;
+    setRegistrationMode(button.dataset.registrationMode);
+  });
+  $("#addBulkRegistrant").addEventListener("click", () => addBulkRegistrantRow());
   $("#courseMasterTabs").addEventListener("click", (event) => {
     const button = event.target.closest("button[data-course-master-tab]");
     if (!button) return;
@@ -3281,8 +3417,7 @@ function bindEvents() {
         showToast("Registration is open only for upcoming programs.");
         return;
       }
-      $("#courseSelect").value = publicRegister.dataset.publicRegister;
-      $("#registrationDialog").showModal();
+      openRegistrationDialog(publicRegister.dataset.publicRegister);
       return;
     }
     const cancelRegistration = event.target.closest("#closeRegistration, #cancelRegistration");
@@ -3394,6 +3529,13 @@ function bindEvents() {
       if (rowSelect.checked) selected.add(rowSelect.value);
       else selected.delete(rowSelect.value);
       renderAll();
+      return;
+    }
+    const removeBulkRegistrant = event.target.closest("[data-remove-bulk-registrant]");
+    if (removeBulkRegistrant) {
+      const row = removeBulkRegistrant.closest(".bulk-registrant-row");
+      if (row && document.querySelectorAll(".bulk-registrant-row").length > 1) row.remove();
+      else showToast("At least one registrant row is required.");
       return;
     }
     const bulkClear = event.target.closest("[data-bulk-clear]");
@@ -3591,8 +3733,7 @@ function bindEvents() {
         showToast("Registration is open only for upcoming programs.");
         return;
       }
-      $("#courseSelect").value = registerButton.dataset.courseRegister;
-      $("#registrationDialog").showModal();
+      openRegistrationDialog(registerButton.dataset.courseRegister);
       return;
     }
     const action = event.target.closest("[data-action]");
@@ -3652,65 +3793,33 @@ function bindEvents() {
     if (event.submitter?.value === "cancel") return;
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    const phone = form.get("phone").trim();
     const courseId = form.get("course");
-    const registration = {
-      id: newId("registration"),
-      courseId,
-      status: "Pending",
-      eligible: false,
-      roomId: "",
-      checkedIn: false,
-      attendance: 0,
-      completion: "Pending",
-      certificate: false,
-      sessionAttendance: [],
-      notes: form.get("notes"),
-      registeredOn: new Date().toISOString().slice(0, 10)
-    };
-    let participant = state.participants.find((item) => item.phone === phone || item.id === phone);
-    if (participant) {
-      participant.name = form.get("name").trim() || participant.name;
-      participant.age = Number(form.get("age")) || participant.age;
-      participant.gender = form.get("gender") || participant.gender;
-      participant.email = form.get("email").trim() || participant.email;
-      participant.photo = form.get("photo").trim() || participant.photo || "";
-      participant.address = form.get("address").trim() || participant.address || "";
-      participant.emergencyContact = form.get("emergencyContact").trim() || participant.emergencyContact || "";
-      participant.notes = form.get("notes") || participant.notes || "";
-      registrationsForParticipant(participant).push(registration);
-      syncParticipantFromRegistration(participant, registration);
-    } else {
-      participant = {
-        id: newId("participant"),
-        name: form.get("name").trim(),
-        age: Number(form.get("age")),
-        gender: form.get("gender"),
-        courseId,
-        phone,
-        email: form.get("email").trim(),
-        photo: form.get("photo").trim(),
-        address: form.get("address").trim(),
-        emergencyContact: form.get("emergencyContact").trim(),
-        status: registration.status,
-        eligible: registration.eligible,
-        roomId: registration.roomId,
-        checkedIn: registration.checkedIn,
-        attendance: registration.attendance,
-        completion: registration.completion,
-        certificate: registration.certificate,
-        programHistory: [],
-        notes: form.get("notes"),
-        registrations: [registration]
-      };
-      state.participants.push(participant);
+    const mode = form.get("registrationMode");
+    const registrants = mode === "bulk" ? bulkRegistrantDetails() : [{
+      name: form.get("name"),
+      age: form.get("age"),
+      gender: form.get("gender"),
+      phone: form.get("phone"),
+      email: form.get("email"),
+      photo: form.get("photo"),
+      emergencyContact: form.get("emergencyContact"),
+      address: form.get("address"),
+      notes: form.get("notes")
+    }];
+    const validRegistrants = registrants.filter((item) => item.name.trim() && item.phone.trim() && item.email.trim());
+    if (!validRegistrants.length) {
+      showToast("Add at least one registrant with name, phone, and email.");
+      return;
     }
-    selectedParticipantId = participant.id;
+    const savedParticipants = validRegistrants.map((details) => registerParticipantForCourse(details, courseId));
+    selectedParticipantId = savedParticipants.at(-1)?.id || selectedParticipantId;
     event.currentTarget.reset();
+    $("#bulkRegistrantRows").innerHTML = "";
+    setRegistrationMode("individual");
     $("#registrationDialog").close();
     activateView("registrations");
     renderAll();
-    showToast("Registration submitted under the participant profile.");
+    showToast(`${savedParticipants.length} registration${savedParticipants.length === 1 ? "" : "s"} submitted.`);
   });
   $("#courseForm").addEventListener("submit", (event) => {
     if (event.submitter?.value === "cancel") return;
@@ -3761,8 +3870,9 @@ function bindEvents() {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const existingProgram = state.programs.find((program) => program.id === form.get("id"));
+    const programId = form.get("id") || newId("program");
     const programData = {
-      id: form.get("id") || newId("program"),
+      id: programId,
       parentId: form.get("parentId"),
       code: form.get("code").trim(),
       name: form.get("name").trim(),

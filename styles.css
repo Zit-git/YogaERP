@@ -1385,6 +1385,42 @@ tr:last-child td { border-bottom: 0; }
   font-size: 13px;
 }
 
+.registration-program-grid {
+  margin-bottom: 12px;
+}
+
+.registration-mode-tabs {
+  margin-bottom: 14px;
+}
+
+.bulk-registration-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.bulk-registrant-list {
+  display: grid;
+  gap: 12px;
+  max-height: min(54vh, 560px);
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.bulk-registrant-row {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  padding: 12px;
+}
+
+.bulk-registrant-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
 .kanban {
   display: grid;
   grid-template-columns: repeat(4, minmax(230px, 1fr));
