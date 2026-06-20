@@ -799,6 +799,11 @@ function teachersForProgram(programId) {
   return ids.map((teacherId) => teachers.find((teacher) => teacher.id === teacherId)).filter(Boolean);
 }
 
+function courseMasterLabel(program) {
+  const ancestors = programAncestors(program).map((item) => item.name);
+  return [...ancestors, program.name].join(" > ");
+}
+
 function courseDays(courseId) {
   const course = state.courses.find((item) => item.id === courseId);
   if (!course) return [];
@@ -2692,15 +2697,26 @@ function renderHistory() {
 function renderCourseOptions() {
   const registrationPrograms = state.courses.filter(isPortalProgram);
   $("#courseSelect").innerHTML = registrationPrograms.map((course) => `<option value="${course.id}">${course.name}</option>`).join("");
-  $("#hallSelect").innerHTML = state.halls.map((hall) => `<option value="${hall.id}">${hall.name} (${hall.capacity})</option>`).join("");
+  $("#hallSelect").innerHTML = state.halls.length
+    ? state.halls.map((hall) => `<option value="${hall.id}">${hall.name} (${hall.capacity})</option>`).join("")
+    : `<option value="">No Program Halls available</option>`;
   const courseMasterOptions = state.programs.map((program) => {
-    const ancestors = programAncestors(program).map((item) => item.name);
-    const label = [...ancestors, program.name].join(" > ");
+    const label = courseMasterLabel(program);
     return `<option value="${program.id}">${label}${program.duration ? ` (${program.duration})` : ""}</option>`;
   }).join("");
   $("#batchProgramSelect").innerHTML = courseMasterOptions || `<option value="">No Course Master records available</option>`;
   renderBatchTeacherOptions();
   renderProgramTeacherOptions();
+}
+
+function prepareCourseDialog() {
+  $("#courseForm").reset();
+  renderCourseOptions();
+  const firstCourseWithTeachers = state.programs.find((program) => teachersForProgram(program.id).length);
+  if (firstCourseWithTeachers) {
+    $("#batchProgramSelect").value = firstCourseWithTeachers.id;
+  }
+  renderBatchTeacherOptions();
 }
 
 function renderProgramParentOptions(currentId = "") {
@@ -3364,7 +3380,7 @@ function deleteProgram(programId) {
 function bindEvents() {
   $("#addCourse").addEventListener("click", () => {
     if (!canManageMasters()) return;
-    renderCourseOptions();
+    prepareCourseDialog();
     $("#courseDialog").showModal();
   });
   $("#addProgram").addEventListener("click", () => canManageMasters() && openProgramDialog());
@@ -3950,6 +3966,14 @@ function bindEvents() {
     const hallId = form.get("hallId");
     const programId = form.get("programId");
     const program = state.programs.find((item) => item.id === programId);
+    if (!program) {
+      showToast("Create a Course Master before scheduling a program.");
+      return;
+    }
+    if (!hallId || !state.halls.some((hall) => hall.id === hallId)) {
+      showToast("Create a Program Hall before scheduling a program.");
+      return;
+    }
     const teacherName = form.get("teacher").trim();
     if (!teacherName) {
       showToast("Assign teachers to this Course Master before scheduling a program.");
