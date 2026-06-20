@@ -20,6 +20,8 @@ let hasLoadedRemoteData = false;
 let isHydratingRemoteData = false;
 let remoteSaveTimer = null;
 let remoteStatus = supabaseClient ? "Supabase connecting" : "Supabase not configured";
+let supportsCourseTeacherIds = true;
+let hasWarnedTeacherIdsSchema = false;
 let currentFilter = "all";
 let portalProgramFilter = "";
 let portalProgramSort = "startAsc";
@@ -211,7 +213,14 @@ async function fetchSupabaseRows(tableName) {
   return data || [];
 }
 
+async function detectCourseTeacherIdsSupport() {
+  if (!supabaseClient) return;
+  const { error } = await supabaseClient.from("course_masters").select("teacher_ids").limit(1);
+  supportsCourseTeacherIds = !error;
+}
+
 async function loadRelationalData() {
+  await detectCourseTeacherIdsSupport();
   const [
     courseMasters,
     teachers,
@@ -362,7 +371,7 @@ async function persistRemoteData() {
   if (!supabaseClient || !hasLoadedRemoteData) return;
   try {
     await syncRelationalTables();
-    remoteStatus = "Supabase synced";
+    if (!remoteStatus.includes("course_teacher_associations")) remoteStatus = "Supabase synced";
     renderAuthState();
   } catch (error) {
     remoteStatus = "Supabase save failed";
@@ -385,18 +394,28 @@ async function syncRelationalTables() {
   const now = new Date().toISOString();
   const courseMasterRows = [...state.programs]
     .sort((a, b) => (a.parentId ? 1 : 0) - (b.parentId ? 1 : 0))
-    .map((program) => ({
-      id: program.id,
-      parent_id: program.parentId || null,
-      code: program.code || "",
-      name: program.name,
-      level: program.level || "",
-      duration: program.duration || "",
-      eligibility: program.eligibility || "",
-      session_templates: program.sessionTemplates || [],
-      teacher_ids: program.teacherIds || [],
-      updated_at: now
-    }));
+    .map((program) => {
+      const row = {
+        id: program.id,
+        parent_id: program.parentId || null,
+        code: program.code || "",
+        name: program.name,
+        level: program.level || "",
+        duration: program.duration || "",
+        eligibility: program.eligibility || "",
+        session_templates: program.sessionTemplates || [],
+        updated_at: now
+      };
+      if (supportsCourseTeacherIds) row.teacher_ids = program.teacherIds || [];
+      return row;
+    });
+  if (!supportsCourseTeacherIds && state.programs.some((program) => (program.teacherIds || []).length)) {
+    remoteStatus = "Supabase synced - run course_teacher_associations.sql for teacher mappings";
+    if (!hasWarnedTeacherIdsSchema) {
+      showToast("Run supabase/course_teacher_associations.sql so course-teacher mappings persist.");
+      hasWarnedTeacherIdsSchema = true;
+    }
+  }
   const teacherRows = state.teachers.map((teacher) => ({
     id: teacher.id,
     name: teacher.name,
@@ -746,15 +765,41 @@ function teacherByName(name) {
   return state.teachers.find((teacher) => teacher.name === name) || null;
 }
 
+function teacherById(teacherId) {
+  return state.teachers.find((teacher) => teacher.id === teacherId) || null;
+}
+
+function assignableTeachers() {
+  const teachers = new Map(state.teachers.map((teacher) => [teacher.id, teacher]));
+  accessUsers
+    .filter((user) => user.active && isTeacherRole(user.role_id))
+    .forEach((user) => {
+      const linkedTeacher = teacherById(user.linked_teacher_id);
+      if (linkedTeacher) {
+        teachers.set(linkedTeacher.id, linkedTeacher);
+        return;
+      }
+      const virtualId = user.linked_teacher_id || user.user_id;
+      teachers.set(virtualId, {
+        id: virtualId,
+        name: user.display_name || user.login_email || "Teacher",
+        speciality: roleById(user.role_id)?.name || "Faculty",
+        isVirtual: true
+      });
+    });
+  return Array.from(teachers.values()).sort((a, b) => a.name.localeCompare(b.name));
+}
+
 function teacherNameById(teacherId) {
-  return state.teachers.find((teacher) => teacher.id === teacherId)?.name || "";
+  return assignableTeachers().find((teacher) => teacher.id === teacherId)?.name || "";
 }
 
 function teachersForProgram(programId) {
   const program = state.programs.find((item) => item.id === programId);
   if (!program) return [];
   const ids = Array.isArray(program.teacherIds) ? program.teacherIds : [];
-  return ids.map((teacherId) => state.teachers.find((teacher) => teacher.id === teacherId)).filter(Boolean);
+  const teachers = assignableTeachers();
+  return ids.map((teacherId) => teachers.find((teacher) => teacher.id === teacherId)).filter(Boolean);
 }
 
 function courseDays(courseId) {
@@ -2005,9 +2050,9 @@ function renderProgramDetail() {
       </div>
       <div class="teacher-association-list">
         ${associatedTeachers.length ? associatedTeachers.map((teacher) => `
-          <button class="teacher-association-pill" type="button" data-linked-teacher="${teacher.id}">
+          <button class="teacher-association-pill" type="button" ${teacher.isVirtual ? "" : `data-linked-teacher="${teacher.id}"`}>
             <strong>${teacher.name}</strong>
-            <span>${teacher.speciality || "Faculty"}</span>
+            <span>${teacher.speciality || "Faculty"}${teacher.isVirtual ? " | active user" : ""}</span>
           </button>
         `).join("") : `<span class="muted">No teachers are associated with this course yet. Edit Course to add teachers.</span>`}
       </div>
@@ -2667,10 +2712,10 @@ function renderProgramParentOptions(currentId = "") {
 
 function renderProgramTeacherOptions(selectedIds = []) {
   const selected = new Set(selectedIds);
-  $("#programTeacherOptions").innerHTML = state.teachers.map((teacher) => `
+  $("#programTeacherOptions").innerHTML = assignableTeachers().map((teacher) => `
     <label class="multi-select-option">
       <input type="checkbox" value="${teacher.id}" data-program-teacher-option ${selected.has(teacher.id) ? "checked" : ""}>
-      <span>${teacher.name}</span>
+      <span>${teacher.name}${teacher.isVirtual ? " (active user)" : ""}</span>
     </label>
   `).join("") || `<span class="muted">No teachers available.</span>`;
   syncProgramTeacherSelection();
