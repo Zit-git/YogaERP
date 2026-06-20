@@ -140,11 +140,6 @@ async function loadRemoteData() {
 
 async function loadAccessManagementData() {
   if (!supabaseClient) return;
-  if (!currentSession.permissions?.canManageMasters) {
-    accessRoles = [];
-    accessUsers = [];
-    return;
-  }
   const [rolesResult, usersResult] = await Promise.all([
     supabaseClient.from("roles").select("*").order("name", { ascending: true }),
     supabaseClient.from("user_roles").select("*").order("display_name", { ascending: true })
@@ -152,7 +147,9 @@ async function loadAccessManagementData() {
   if (rolesResult.error) throw rolesResult.error;
   if (usersResult.error) throw usersResult.error;
   accessRoles = rolesResult.data || [];
-  accessUsers = usersResult.data || [];
+  accessUsers = currentSession.permissions?.canManageMasters
+    ? usersResult.data || []
+    : (usersResult.data || []).filter((user) => user.active !== false && isTeacherRole(user.role_id));
 }
 
 async function refreshAuthSession() {
@@ -772,7 +769,7 @@ function teacherById(teacherId) {
 function assignableTeachers() {
   const teachers = new Map(state.teachers.map((teacher) => [teacher.id, teacher]));
   accessUsers
-    .filter((user) => user.active && isTeacherRole(user.role_id))
+    .filter((user) => user.active !== false && isTeacherRole(user.role_id))
     .forEach((user) => {
       const linkedTeacher = teacherById(user.linked_teacher_id);
       if (linkedTeacher) {
@@ -1019,7 +1016,8 @@ function roleById(roleId) {
 
 function isTeacherRole(roleId) {
   const role = roleById(roleId);
-  return roleId === "teacher" || role?.name?.toLowerCase().includes("teacher");
+  const roleText = `${roleId || ""} ${role?.id || ""} ${role?.name || ""}`.toLowerCase();
+  return roleText.includes("teacher");
 }
 
 function permissionsForRole(role) {
