@@ -22,8 +22,10 @@ let remoteSaveTimer = null;
 let remoteStatus = supabaseClient ? "Supabase connecting" : "Supabase not configured";
 let supportsCourseTeacherIds = true;
 let supportsBatchStatus = true;
+let supportsNormalizedSessions = true;
 let hasWarnedTeacherIdsSchema = false;
 let hasWarnedBatchStatusSchema = false;
+let hasWarnedNormalizedSessionsSchema = false;
 let currentFilter = "all";
 let portalProgramFilter = "";
 let portalProgramSort = "startAsc";
@@ -212,6 +214,12 @@ async function fetchSupabaseRows(tableName) {
   return data || [];
 }
 
+async function fetchOptionalSupabaseRows(tableName) {
+  const { data, error } = await supabaseClient.from(tableName).select("*");
+  if (error) return { rows: [], supported: false, error };
+  return { rows: data || [], supported: true, error: null };
+}
+
 async function detectCourseTeacherIdsSupport() {
   if (!supabaseClient) return;
   const { error } = await supabaseClient.from("course_masters").select("teacher_ids").limit(1);
@@ -224,9 +232,66 @@ async function detectBatchStatusSupport() {
   supportsBatchStatus = !error;
 }
 
+async function detectNormalizedSessionsSupport() {
+  if (!supabaseClient) return;
+  const [courseSessions, batchSessions, attendance] = await Promise.all([
+    supabaseClient.from("course_session_templates").select("id").limit(1),
+    supabaseClient.from("batch_sessions").select("id").limit(1),
+    supabaseClient.from("session_attendance").select("id").limit(1)
+  ]);
+  supportsNormalizedSessions = !courseSessions.error && !batchSessions.error && !attendance.error;
+}
+
+function groupRowsBy(rows, key) {
+  return (rows || []).reduce((groups, row) => {
+    const value = row[key];
+    if (!groups.has(value)) groups.set(value, []);
+    groups.get(value).push(row);
+    return groups;
+  }, new Map());
+}
+
+function normalizedCourseTemplates(rows, fallback = []) {
+  if (!rows?.length) return fallback;
+  return [...rows]
+    .sort((a, b) => Number(a.day_number || 0) - Number(b.day_number || 0) || (a.time || "").localeCompare(b.time || ""))
+    .map((row) => ({
+      id: row.id,
+      day: Number(row.day_number) || 1,
+      title: row.title || "",
+      time: row.time || "",
+      topic: row.topic || ""
+    }));
+}
+
+function normalizedBatchSessions(rows, fallback = []) {
+  if (!rows?.length) return fallback;
+  return [...rows]
+    .sort((a, b) => (a.session_date || "").localeCompare(b.session_date || "") || (a.time || "").localeCompare(b.time || ""))
+    .map((row) => ({
+      id: row.id,
+      date: row.session_date || "",
+      title: row.title || "",
+      time: row.time || "",
+      topic: row.topic || ""
+    }));
+}
+
+function normalizedSessionAttendance(rows, fallback = []) {
+  if (!rows?.length) return fallback;
+  return [...rows]
+    .sort((a, b) => (a.marked_at || "").localeCompare(b.marked_at || ""))
+    .map((row) => ({
+      sessionId: row.batch_session_id,
+      status: row.status || "Present",
+      reason: row.reason || ""
+    }));
+}
+
 async function loadRelationalData() {
   await detectCourseTeacherIdsSupport();
   await detectBatchStatusSupport();
+  await detectNormalizedSessionsSupport();
   const [
     courseMasters,
     teachers,
@@ -237,7 +302,10 @@ async function loadRelationalData() {
     batches,
     participants,
     registrations,
-    hallBookings
+    hallBookings,
+    courseSessionTemplates,
+    batchSessions,
+    sessionAttendance
   ] = await Promise.all([
     fetchSupabaseRows("course_masters"),
     fetchSupabaseRows("teachers"),
@@ -248,8 +316,17 @@ async function loadRelationalData() {
     fetchSupabaseRows("batches"),
     fetchSupabaseRows("participants"),
     fetchSupabaseRows("registrations"),
-    fetchSupabaseRows("hall_bookings")
+    fetchSupabaseRows("hall_bookings"),
+    supportsNormalizedSessions ? fetchOptionalSupabaseRows("course_session_templates") : { rows: [] },
+    supportsNormalizedSessions ? fetchOptionalSupabaseRows("batch_sessions") : { rows: [] },
+    supportsNormalizedSessions ? fetchOptionalSupabaseRows("session_attendance") : { rows: [] }
   ]);
+  const courseTemplateRows = courseSessionTemplates.rows || [];
+  const batchSessionRows = batchSessions.rows || [];
+  const attendanceRows = sessionAttendance.rows || [];
+  const courseTemplatesByProgram = groupRowsBy(courseTemplateRows, "program_id");
+  const batchSessionsByBatch = groupRowsBy(batchSessionRows, "batch_id");
+  const attendanceByRegistration = groupRowsBy(attendanceRows, "registration_id");
   const nextState = {
     programs: courseMasters.map((program) => ({
       id: program.id,
@@ -259,7 +336,7 @@ async function loadRelationalData() {
       level: program.level || "",
       duration: program.duration || "",
       eligibility: program.eligibility || "",
-      sessionTemplates: program.session_templates || [],
+      sessionTemplates: normalizedCourseTemplates(courseTemplatesByProgram.get(program.id), program.session_templates || []),
       teacherIds: program.teacher_ids || []
     })),
     teachers: teachers.map((teacher) => ({
@@ -311,7 +388,7 @@ async function loadRelationalData() {
         teacher: batch.teacher_name || teachers.find((teacher) => teacher.id === batch.teacher_id)?.name || "",
         eligibility: batch.eligibility || "",
         status: batch.status || "",
-        sessions: batch.sessions || []
+        sessions: normalizedBatchSessions(batchSessionsByBatch.get(batch.id), batch.sessions || [])
       };
     }),
     participants: participants.map((participant) => ({
@@ -351,7 +428,7 @@ async function loadRelationalData() {
       attendance: Number(registration.attendance) || 0,
       completion: registration.completion || "Pending",
       certificate: Boolean(registration.certificate),
-      sessionAttendance: registration.session_attendance || [],
+      sessionAttendance: normalizedSessionAttendance(attendanceByRegistration.get(registration.id), registration.session_attendance || []),
       notes: registration.notes || "",
       registeredOn: registration.registered_on || new Date().toISOString().slice(0, 10)
     });
@@ -377,7 +454,7 @@ async function persistRemoteData() {
   if (!supabaseClient || !hasLoadedRemoteData) return;
   try {
     await syncRelationalTables();
-    if (!remoteStatus.includes("course_teacher_associations") && !remoteStatus.includes("batches_status")) remoteStatus = "Supabase synced";
+    if (!remoteStatus.includes("course_teacher_associations") && !remoteStatus.includes("batches_status") && !remoteStatus.includes("normalized_sessions")) remoteStatus = "Supabase synced";
     renderAuthState();
   } catch (error) {
     remoteStatus = "Supabase save failed";
@@ -427,6 +504,13 @@ async function syncRelationalTables() {
     if (!hasWarnedBatchStatusSchema) {
       showToast("Run supabase/batches_status.sql so program status persists.");
       hasWarnedBatchStatusSchema = true;
+    }
+  }
+  if (!supportsNormalizedSessions && (state.programs.some((program) => (program.sessionTemplates || []).length) || state.courses.some((course) => (course.sessions || []).length))) {
+    remoteStatus = "Supabase synced - run normalized_sessions_attendance.sql";
+    if (!hasWarnedNormalizedSessionsSchema) {
+      showToast("Run supabase/normalized_sessions_attendance.sql for normalized sessions and attendance.");
+      hasWarnedNormalizedSessionsSchema = true;
     }
   }
   const teacherRows = state.teachers.map((teacher) => ({
@@ -527,8 +611,44 @@ async function syncRelationalTables() {
     notes: booking.notes || "",
     updated_at: now
   }));
+  const courseSessionTemplateRows = state.programs.flatMap((program) => (program.sessionTemplates || []).map((session, index) => ({
+    id: session.id,
+    program_id: program.id,
+    day_number: Number(session.day) || 1,
+    title: session.title || "",
+    time: session.time || "",
+    topic: session.topic || "",
+    display_order: index + 1,
+    updated_at: now
+  })));
+  const batchSessionRows = state.courses.flatMap((course) => courseSessionPlan(course.id).map((session, index) => ({
+    id: session.id,
+    batch_id: course.id,
+    session_date: session.date,
+    title: session.title || "",
+    time: session.time || "",
+    topic: session.topic || "",
+    display_order: index + 1,
+    updated_at: now
+  })));
+  const sessionAttendanceRows = allRegistrationRows().flatMap(({ participant, registration }) => (registration.sessionAttendance || []).map((record) => ({
+    id: `${registration.id}-${record.sessionId}`.slice(0, 250),
+    registration_id: registration.id,
+    participant_id: participant.id,
+    batch_id: registration.courseId || null,
+    batch_session_id: record.sessionId,
+    status: record.status || "Present",
+    reason: record.reason || "",
+    marked_at: now,
+    updated_at: now
+  })));
 
   await replaceSupabaseTable("hall_bookings", []);
+  if (supportsNormalizedSessions) {
+    await replaceSupabaseTable("session_attendance", []);
+    await replaceSupabaseTable("batch_sessions", []);
+    await replaceSupabaseTable("course_session_templates", []);
+  }
   await replaceSupabaseTable("registrations", []);
   await replaceSupabaseTable("batches", []);
   await replaceSupabaseTable("rooms", []);
@@ -540,14 +660,17 @@ async function syncRelationalTables() {
   await replaceSupabaseTable("course_masters", []);
 
   await replaceSupabaseTable("course_masters", courseMasterRows);
+  if (supportsNormalizedSessions) await replaceSupabaseTable("course_session_templates", courseSessionTemplateRows);
   await replaceSupabaseTable("teachers", teacherRows);
   await replaceSupabaseTable("program_halls", hallRows);
   await replaceSupabaseTable("accommodation_blocks", blockRows);
   await replaceSupabaseTable("accommodation_floors", floorRows);
   await replaceSupabaseTable("rooms", roomRows);
   await replaceSupabaseTable("batches", batchRows);
+  if (supportsNormalizedSessions) await replaceSupabaseTable("batch_sessions", batchSessionRows);
   await replaceSupabaseTable("participants", participantRows);
   await replaceSupabaseTable("registrations", registrationRows);
+  if (supportsNormalizedSessions) await replaceSupabaseTable("session_attendance", sessionAttendanceRows);
   await replaceSupabaseTable("hall_bookings", hallBookingRows);
 }
 

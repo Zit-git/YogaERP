@@ -26,6 +26,18 @@ create table if not exists public.teachers (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.course_session_templates (
+  id text primary key,
+  program_id text not null references public.course_masters(id) on delete cascade,
+  day_number integer not null default 1,
+  title text not null,
+  time text,
+  topic text,
+  display_order integer not null default 1,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create table if not exists public.program_halls (
   id text primary key,
   name text not null,
@@ -84,6 +96,18 @@ create table if not exists public.batches (
 alter table public.batches
   add column if not exists status text not null default 'Upcoming';
 
+create table if not exists public.batch_sessions (
+  id text primary key,
+  batch_id text not null references public.batches(id) on delete cascade,
+  session_date date not null,
+  title text not null,
+  time text,
+  topic text,
+  display_order integer not null default 1,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create table if not exists public.participants (
   id text primary key,
   name text not null,
@@ -114,6 +138,19 @@ create table if not exists public.registrations (
   session_attendance jsonb not null default '[]'::jsonb,
   notes text,
   registered_on date not null default current_date,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.session_attendance (
+  id text primary key,
+  registration_id text not null references public.registrations(id) on delete cascade,
+  participant_id text not null references public.participants(id) on delete cascade,
+  batch_id text references public.batches(id) on delete cascade,
+  batch_session_id text not null references public.batch_sessions(id) on delete cascade,
+  status text not null default 'Present',
+  reason text,
+  marked_at timestamptz not null default now(),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -179,14 +216,17 @@ alter table public.user_roles
   add column if not exists login_email text;
 
 alter table public.course_masters enable row level security;
+alter table public.course_session_templates enable row level security;
 alter table public.teachers enable row level security;
 alter table public.program_halls enable row level security;
 alter table public.accommodation_blocks enable row level security;
 alter table public.accommodation_floors enable row level security;
 alter table public.rooms enable row level security;
 alter table public.batches enable row level security;
+alter table public.batch_sessions enable row level security;
 alter table public.participants enable row level security;
 alter table public.registrations enable row level security;
+alter table public.session_attendance enable row level security;
 alter table public.hall_bookings enable row level security;
 alter table public.roles enable row level security;
 alter table public.user_roles enable row level security;

@@ -1,18 +1,23 @@
 alter table public.course_masters enable row level security;
+alter table public.course_session_templates enable row level security;
 alter table public.teachers enable row level security;
 alter table public.program_halls enable row level security;
 alter table public.accommodation_blocks enable row level security;
 alter table public.accommodation_floors enable row level security;
 alter table public.rooms enable row level security;
 alter table public.batches enable row level security;
+alter table public.batch_sessions enable row level security;
 alter table public.participants enable row level security;
 alter table public.registrations enable row level security;
+alter table public.session_attendance enable row level security;
 alter table public.hall_bookings enable row level security;
 alter table public.roles enable row level security;
 alter table public.user_roles enable row level security;
 
 drop policy if exists "temporary_demo_read_course_masters" on public.course_masters;
 drop policy if exists "temporary_demo_write_course_masters" on public.course_masters;
+drop policy if exists "temporary_demo_read_course_session_templates" on public.course_session_templates;
+drop policy if exists "temporary_demo_write_course_session_templates" on public.course_session_templates;
 drop policy if exists "temporary_demo_read_teachers" on public.teachers;
 drop policy if exists "temporary_demo_write_teachers" on public.teachers;
 drop policy if exists "temporary_demo_read_program_halls" on public.program_halls;
@@ -25,10 +30,14 @@ drop policy if exists "temporary_demo_read_rooms" on public.rooms;
 drop policy if exists "temporary_demo_write_rooms" on public.rooms;
 drop policy if exists "temporary_demo_read_batches" on public.batches;
 drop policy if exists "temporary_demo_write_batches" on public.batches;
+drop policy if exists "temporary_demo_read_batch_sessions" on public.batch_sessions;
+drop policy if exists "temporary_demo_write_batch_sessions" on public.batch_sessions;
 drop policy if exists "temporary_demo_read_participants" on public.participants;
 drop policy if exists "temporary_demo_write_participants" on public.participants;
 drop policy if exists "temporary_demo_read_registrations" on public.registrations;
 drop policy if exists "temporary_demo_write_registrations" on public.registrations;
+drop policy if exists "temporary_demo_read_session_attendance" on public.session_attendance;
+drop policy if exists "temporary_demo_write_session_attendance" on public.session_attendance;
 drop policy if exists "temporary_demo_read_hall_bookings" on public.hall_bookings;
 drop policy if exists "temporary_demo_write_hall_bookings" on public.hall_bookings;
 drop policy if exists "roles_read_active" on public.roles;
@@ -40,6 +49,9 @@ drop policy if exists "temporary_demo_write_user_roles" on public.user_roles;
 
 create policy "temporary_demo_read_course_masters" on public.course_masters for select using (true);
 create policy "temporary_demo_write_course_masters" on public.course_masters for all using (true) with check (true);
+
+create policy "temporary_demo_read_course_session_templates" on public.course_session_templates for select using (true);
+create policy "temporary_demo_write_course_session_templates" on public.course_session_templates for all using (true) with check (true);
 
 create policy "temporary_demo_read_teachers" on public.teachers for select using (true);
 create policy "temporary_demo_write_teachers" on public.teachers for all using (true) with check (true);
@@ -59,11 +71,17 @@ create policy "temporary_demo_write_rooms" on public.rooms for all using (true) 
 create policy "temporary_demo_read_batches" on public.batches for select using (true);
 create policy "temporary_demo_write_batches" on public.batches for all using (true) with check (true);
 
+create policy "temporary_demo_read_batch_sessions" on public.batch_sessions for select using (true);
+create policy "temporary_demo_write_batch_sessions" on public.batch_sessions for all using (true) with check (true);
+
 create policy "temporary_demo_read_participants" on public.participants for select using (true);
 create policy "temporary_demo_write_participants" on public.participants for all using (true) with check (true);
 
 create policy "temporary_demo_read_registrations" on public.registrations for select using (true);
 create policy "temporary_demo_write_registrations" on public.registrations for all using (true) with check (true);
+
+create policy "temporary_demo_read_session_attendance" on public.session_attendance for select using (true);
+create policy "temporary_demo_write_session_attendance" on public.session_attendance for all using (true) with check (true);
 
 create policy "temporary_demo_read_hall_bookings" on public.hall_bookings for select using (true);
 create policy "temporary_demo_write_hall_bookings" on public.hall_bookings for all using (true) with check (true);
