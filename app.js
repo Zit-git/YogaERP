@@ -791,12 +791,16 @@ function teacherNameById(teacherId) {
   return assignableTeachers().find((teacher) => teacher.id === teacherId)?.name || "";
 }
 
-function teachersForProgram(programId) {
+function mappedTeachersForProgram(programId) {
   const program = state.programs.find((item) => item.id === programId);
   if (!program) return [];
   const ids = Array.isArray(program.teacherIds) ? program.teacherIds : [];
   const teachers = assignableTeachers();
   return ids.map((teacherId) => teachers.find((teacher) => teacher.id === teacherId)).filter(Boolean);
+}
+
+function teachersForProgram(programId) {
+  return mappedTeachersForProgram(programId).length ? mappedTeachersForProgram(programId) : assignableTeachers();
 }
 
 function courseMasterLabel(program) {
@@ -2019,7 +2023,7 @@ function renderProgramDetail() {
     return;
   }
   const sessions = program.sessionTemplates || [];
-  const associatedTeachers = teachersForProgram(program.id);
+  const associatedTeachers = mappedTeachersForProgram(program.id);
   const conducted = conductedProgramsForCourse(program);
   $("#programDetail").innerHTML = `
     <div class="batch-detail-heading">
