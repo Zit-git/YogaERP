@@ -2027,6 +2027,7 @@ function renderProgramDetail() {
       </div>
     </div>
     <div class="course-meta detail-meta">
+      <div><span>Duration</span><strong>${program.duration || "Varies"}</strong></div>
       <div><span>Eligibility</span><strong>${program.eligibility}</strong></div>
       <div><span>Parent Course</span><strong>${state.programs.find((item) => item.id === program.parentId)?.name || "Root course family"}</strong></div>
       <div><span>Child Courses</span><strong>${programChildren(program.id).length}</strong></div>
@@ -2692,10 +2693,12 @@ function renderCourseOptions() {
   const registrationPrograms = state.courses.filter(isPortalProgram);
   $("#courseSelect").innerHTML = registrationPrograms.map((course) => `<option value="${course.id}">${course.name}</option>`).join("");
   $("#hallSelect").innerHTML = state.halls.map((hall) => `<option value="${hall.id}">${hall.name} (${hall.capacity})</option>`).join("");
-  $("#batchProgramSelect").innerHTML = state.programs
-    .filter((program) => program.parentId)
-    .map((program) => `<option value="${program.id}">${program.name}</option>`)
-    .join("");
+  const courseMasterOptions = state.programs.map((program) => {
+    const ancestors = programAncestors(program).map((item) => item.name);
+    const label = [...ancestors, program.name].join(" > ");
+    return `<option value="${program.id}">${label}${program.duration ? ` (${program.duration})` : ""}</option>`;
+  }).join("");
+  $("#batchProgramSelect").innerHTML = courseMasterOptions || `<option value="">No Course Master records available</option>`;
   renderBatchTeacherOptions();
   renderProgramTeacherOptions();
 }
@@ -3359,7 +3362,11 @@ function deleteProgram(programId) {
 }
 
 function bindEvents() {
-  $("#addCourse").addEventListener("click", () => canManageMasters() && $("#courseDialog").showModal());
+  $("#addCourse").addEventListener("click", () => {
+    if (!canManageMasters()) return;
+    renderCourseOptions();
+    $("#courseDialog").showModal();
+  });
   $("#addProgram").addEventListener("click", () => canManageMasters() && openProgramDialog());
   $("#addRegistration").addEventListener("click", () => openRegistrationDialog());
   $("#addParticipantFromMaster").addEventListener("click", () => {
