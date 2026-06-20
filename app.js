@@ -21,7 +21,9 @@ let isHydratingRemoteData = false;
 let remoteSaveTimer = null;
 let remoteStatus = supabaseClient ? "Supabase connecting" : "Supabase not configured";
 let supportsCourseTeacherIds = true;
+let supportsBatchStatus = true;
 let hasWarnedTeacherIdsSchema = false;
+let hasWarnedBatchStatusSchema = false;
 let currentFilter = "all";
 let portalProgramFilter = "";
 let portalProgramSort = "startAsc";
@@ -216,8 +218,15 @@ async function detectCourseTeacherIdsSupport() {
   supportsCourseTeacherIds = !error;
 }
 
+async function detectBatchStatusSupport() {
+  if (!supabaseClient) return;
+  const { error } = await supabaseClient.from("batches").select("status").limit(1);
+  supportsBatchStatus = !error;
+}
+
 async function loadRelationalData() {
   await detectCourseTeacherIdsSupport();
+  await detectBatchStatusSupport();
   const [
     courseMasters,
     teachers,
@@ -368,7 +377,7 @@ async function persistRemoteData() {
   if (!supabaseClient || !hasLoadedRemoteData) return;
   try {
     await syncRelationalTables();
-    if (!remoteStatus.includes("course_teacher_associations")) remoteStatus = "Supabase synced";
+    if (!remoteStatus.includes("course_teacher_associations") && !remoteStatus.includes("batches_status")) remoteStatus = "Supabase synced";
     renderAuthState();
   } catch (error) {
     remoteStatus = "Supabase save failed";
@@ -413,6 +422,13 @@ async function syncRelationalTables() {
       hasWarnedTeacherIdsSchema = true;
     }
   }
+  if (!supportsBatchStatus && state.courses.length) {
+    remoteStatus = "Supabase synced - run batches_status.sql for program statuses";
+    if (!hasWarnedBatchStatusSchema) {
+      showToast("Run supabase/batches_status.sql so program status persists.");
+      hasWarnedBatchStatusSchema = true;
+    }
+  }
   const teacherRows = state.teachers.map((teacher) => ({
     id: teacher.id,
     name: teacher.name,
@@ -455,7 +471,7 @@ async function syncRelationalTables() {
   }));
   const batchRows = state.courses.map((course) => {
     const teacher = teacherByName(course.teacher);
-    return {
+    const row = {
       id: course.id,
       program_id: course.programId || null,
       name: course.name,
@@ -466,10 +482,11 @@ async function syncRelationalTables() {
       teacher_id: teacher?.id || null,
       teacher_name: course.teacher || "",
       eligibility: course.eligibility || "",
-      status: course.status || programLifecycleStatus(course),
       sessions: course.sessions || [],
       updated_at: now
     };
+    if (supportsBatchStatus) row.status = course.status || programLifecycleStatus(course);
+    return row;
   });
   const participantRows = state.participants.map((participant) => ({
     id: participant.id,
