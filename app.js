@@ -3247,7 +3247,7 @@ function openTeacherDialog(teacherId = "") {
   form.reset();
   form.elements.id.value = teacherId;
   if (teacherId) {
-    const teacher = state.teachers.find((item) => item.id === teacherId);
+    const teacher = assignableTeachers().find((item) => item.id === teacherId);
     if (!teacher) return;
     $("#teacherDialogTitle").textContent = "Edit Teacher Profile";
     form.elements.title.value = teacher.title || "";
@@ -4529,12 +4529,17 @@ function bindEvents() {
     const existingIndex = state.teachers.findIndex((teacher) => teacher.id === teacherData.id);
     if (existingIndex >= 0) {
       const previousName = state.teachers[existingIndex].name;
+      const previousDisplayName = teacherDisplayName(state.teachers[existingIndex]);
       state.teachers[existingIndex] = teacherData;
       state.courses.forEach((course) => {
-        if (course.teacher === previousName) course.teacher = teacherData.name;
+        if (course.teacher === previousName || course.teacher === previousDisplayName) course.teacher = teacherData.name;
       });
     } else {
+      const previousTeacher = assignableTeachers().find((teacher) => teacher.id === teacherData.id);
       state.teachers.push(teacherData);
+      state.courses.forEach((course) => {
+        if (previousTeacher && (course.teacher === previousTeacher.name || course.teacher === teacherDisplayName(previousTeacher))) course.teacher = teacherData.name;
+      });
     }
     event.currentTarget.reset();
     $("#teacherDialog").close();
