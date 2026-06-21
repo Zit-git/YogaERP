@@ -5,6 +5,10 @@ create table if not exists public.teachers (
   phone text,
   email text,
   photo text,
+  contact_number text,
+  education text,
+  gender text,
+  marital_status text,
   notes text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()

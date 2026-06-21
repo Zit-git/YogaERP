@@ -22,6 +22,7 @@ let remoteStatus = supabaseClient ? "Supabase connecting" : "Supabase not config
 let supportsCourseTeacherIds = true;
 let supportsBatchStatus = true;
 let supportsNormalizedSessions = true;
+let supportsTeacherProfileFields = true;
 let currentFilter = "all";
 let portalProgramFilter = "";
 let portalProgramSort = "startAsc";
@@ -242,6 +243,12 @@ async function detectNormalizedSessionsSupport() {
   supportsNormalizedSessions = !courseSessions.error && !batchSessions.error && !attendance.error;
 }
 
+async function detectTeacherProfileFieldsSupport() {
+  if (!supabaseClient) return;
+  const { error } = await supabaseClient.from("teachers").select("contact_number,education,gender,marital_status").limit(1);
+  supportsTeacherProfileFields = !error;
+}
+
 function groupRowsBy(rows, key) {
   return (rows || []).reduce((groups, row) => {
     const value = row[key];
@@ -292,6 +299,7 @@ async function loadRelationalData() {
   await detectCourseTeacherIdsSupport();
   await detectBatchStatusSupport();
   await detectNormalizedSessionsSupport();
+  await detectTeacherProfileFieldsSupport();
   const [
     courseMasters,
     teachers,
@@ -346,6 +354,10 @@ async function loadRelationalData() {
       phone: teacher.phone || "",
       email: teacher.email || "",
       photo: teacher.photo || "",
+      contactNumber: teacher.contact_number || "",
+      education: teacher.education || "",
+      gender: teacher.gender || "",
+      maritalStatus: teacher.marital_status || "",
       notes: teacher.notes || ""
     })),
     halls: halls.map((hall) => ({
@@ -520,6 +532,9 @@ async function syncRelationalTables() {
   if (!supportsNormalizedSessions && (state.programs.some((program) => (program.sessionTemplates || []).length) || state.courses.some((course) => (course.sessions || []).length))) {
     remoteStatus = "Supabase synced - run supabase/production_schema_update.sql";
   }
+  if (!supportsTeacherProfileFields && state.teachers.some((teacher) => teacher.contactNumber || teacher.education || teacher.gender || teacher.maritalStatus)) {
+    remoteStatus = "Supabase synced - run supabase/production_schema_update.sql";
+  }
   const teacherRows = state.teachers.map((teacher) => ({
     id: teacher.id,
     name: teacher.name,
@@ -529,7 +544,17 @@ async function syncRelationalTables() {
     photo: teacher.photo || "",
     notes: teacher.notes || "",
     updated_at: now
-  }));
+  })).map((row, index) => {
+    if (!supportsTeacherProfileFields) return row;
+    const teacher = state.teachers[index];
+    return {
+      ...row,
+      contact_number: teacher.contactNumber || "",
+      education: teacher.education || "",
+      gender: teacher.gender || "",
+      marital_status: teacher.maritalStatus || ""
+    };
+  });
   const hallRows = state.halls.map((hall) => ({
     id: hall.id,
     name: hall.name,
@@ -726,6 +751,10 @@ function migrateState() {
   });
   state.teachers.forEach((teacher) => {
     teacher.photo ||= "";
+    teacher.contactNumber ||= "";
+    teacher.education ||= "";
+    teacher.gender ||= "";
+    teacher.maritalStatus ||= "";
     teacher.notes = (teacher.notes || "").replaceAll("batches", "programs").replaceAll("Batches", "Programs");
   });
   state.participants.forEach((participant) => {
@@ -899,6 +928,10 @@ function assignableTeachers() {
         phone: "",
         email: user.login_email || "",
         photo: "",
+        contactNumber: "",
+        education: "",
+        gender: "",
+        maritalStatus: "",
         notes: "Teacher login user",
         isVirtual: true
       });
@@ -2290,7 +2323,7 @@ function renderTeachers() {
   const columns = [
     { key: "name", label: "Teacher", value: (teacher) => teacher.name },
     { key: "speciality", label: "Speciality", value: (teacher) => teacher.speciality },
-    { key: "contact", label: "Contact", value: (teacher) => `${teacher.phone} ${teacher.email}` },
+    { key: "contact", label: "Contact", value: (teacher) => `${teacher.phone} ${teacher.contactNumber} ${teacher.email}` },
     { key: "programs", label: "Programs", value: (teacher) => state.courses.filter((course) => course.teacher === teacher.name).length },
     { key: "actions", label: "Actions", value: () => "", sort: false, filter: false }
   ];
@@ -2308,7 +2341,7 @@ function renderTeachers() {
         ${renderSelectionCell("teachers", teacher.id)}
         <td><strong>${teacher.name}</strong><br><span class="muted">${teacher.email}</span></td>
         <td>${teacher.speciality}</td>
-        <td>${teacher.phone}<br><span class="muted">${teacher.email}</span></td>
+        <td>${teacher.phone || "No phone"}<br><span class="muted">${teacher.email || "No email"}${teacher.contactNumber ? ` | ${teacher.contactNumber}` : ""}</span></td>
         <td>${programs.length ? programs.map((course) => `<span class="pill">${course.name}</span>`).join(" ") : "<span class=\"muted\">No programs assigned</span>"}</td>
         <td>
           ${canManageMasters() ? `<div class="row-actions">
@@ -2333,7 +2366,7 @@ function renderTeachers() {
         <div class="participant-detail-heading">
           <div>
             <h3>${selected.name}</h3>
-            <p class="muted">${selected.email} | ${selected.phone}</p>
+            <p class="muted">${[selected.email, selected.phone, selected.contactNumber].filter(Boolean).join(" | ") || "Contact details not captured"}</p>
           </div>
           <span class="pill">${conducted.length} program(s)</span>
         </div>
@@ -2345,6 +2378,10 @@ function renderTeachers() {
     <div class="detail-grid">
       <div class="detail-item"><span>Phone</span><strong>${selected.phone}</strong></div>
       <div class="detail-item"><span>Email</span><strong>${selected.email}</strong></div>
+      <div class="detail-item"><span>Contact Number</span><strong>${selected.contactNumber || "Not captured"}</strong></div>
+      <div class="detail-item"><span>Gender</span><strong>${selected.gender || "Not specified"}</strong></div>
+      <div class="detail-item"><span>Marital Status</span><strong>${selected.maritalStatus || "Not specified"}</strong></div>
+      <div class="detail-item detail-item-wide"><span>Educational Qualifications</span><strong>${selected.education || "Not captured"}</strong></div>
       <div class="detail-item detail-item-wide"><span>Notes</span><strong>${selected.notes || "No notes recorded."}</strong></div>
     </div>
     <section class="participant-subform">
@@ -3140,7 +3177,12 @@ function openTeacherDialog(teacherId = "") {
     form.elements.name.value = teacher.name;
     form.elements.speciality.value = teacher.speciality;
     form.elements.phone.value = teacher.phone;
+    form.elements.contactNumber.value = teacher.contactNumber || "";
     form.elements.email.value = teacher.email;
+    form.elements.photo.value = teacher.photo || "";
+    form.elements.gender.value = teacher.gender || "";
+    form.elements.maritalStatus.value = teacher.maritalStatus || "";
+    form.elements.education.value = teacher.education || "";
     form.elements.notes.value = teacher.notes || "";
   } else {
     $("#teacherDialogTitle").textContent = "Edit Teacher Profile";
@@ -3329,6 +3371,14 @@ async function saveAccessUser(form) {
       notes: "Created from user access",
       updated_at: new Date().toISOString()
     };
+    if (supportsTeacherProfileFields) {
+      Object.assign(teacherPayload, {
+        contact_number: "",
+        education: "",
+        gender: "",
+        marital_status: ""
+      });
+    }
     const teacherResult = await supabaseClient.from("teachers").upsert(teacherPayload);
     if (teacherResult.error) {
       showToast(teacherResult.error.message || "Unable to save teacher profile.");
@@ -3342,6 +3392,10 @@ async function saveAccessUser(form) {
       phone: teacherPayload.phone,
       email: teacherPayload.email,
       photo: teacherPayload.photo,
+      contactNumber: teacherPayload.contact_number || "",
+      education: teacherPayload.education || "",
+      gender: teacherPayload.gender || "",
+      maritalStatus: teacherPayload.marital_status || "",
       notes: teacherPayload.notes
     };
     if (existingTeacher) Object.assign(existingTeacher, teacherState);
@@ -4368,7 +4422,12 @@ function bindEvents() {
       name: form.get("name").trim(),
       speciality: form.get("speciality").trim(),
       phone: form.get("phone").trim(),
+      contactNumber: form.get("contactNumber").trim(),
       email: form.get("email").trim(),
+      photo: form.get("photo").trim(),
+      gender: form.get("gender"),
+      maritalStatus: form.get("maritalStatus"),
+      education: form.get("education").trim(),
       notes: form.get("notes").trim()
     };
     const existingIndex = state.teachers.findIndex((teacher) => teacher.id === teacherData.id);
