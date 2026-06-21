@@ -56,6 +56,7 @@ const views = [
 ];
 
 const navViews = [
+  ["dashboard", "Dashboard"],
   ["programs", "Course"],
   ["courses", "Programs"],
   ["registrations", "Registrations"],
@@ -70,7 +71,7 @@ const roleViews = {
   public: [],
   participant: ["courses", "participants"],
   teacher: ["courses", "participants", "teachers"],
-  admin: [...navViews.map(([id]) => id), "teachers", "dashboard"]
+  admin: [...navViews.map(([id]) => id), "teachers"]
 };
 
 const $ = (selector) => document.querySelector(selector);
