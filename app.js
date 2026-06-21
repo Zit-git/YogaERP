@@ -23,9 +23,6 @@ let remoteStatus = supabaseClient ? "Supabase connecting" : "Supabase not config
 let supportsCourseTeacherIds = true;
 let supportsBatchStatus = true;
 let supportsNormalizedSessions = true;
-let hasWarnedTeacherIdsSchema = false;
-let hasWarnedBatchStatusSchema = false;
-let hasWarnedNormalizedSessionsSchema = false;
 let currentFilter = "all";
 let portalProgramFilter = "";
 let portalProgramSort = "startAsc";
@@ -493,25 +490,13 @@ async function syncRelationalTables() {
       return row;
     });
   if (!supportsCourseTeacherIds && state.programs.some((program) => (program.teacherIds || []).length)) {
-    remoteStatus = "Supabase synced - run course_teacher_associations.sql for teacher mappings";
-    if (!hasWarnedTeacherIdsSchema) {
-      showToast("Run supabase/course_teacher_associations.sql so course-teacher mappings persist.");
-      hasWarnedTeacherIdsSchema = true;
-    }
+    remoteStatus = "Supabase synced - run supabase/production_schema_update.sql";
   }
   if (!supportsBatchStatus && state.courses.length) {
-    remoteStatus = "Supabase synced - run batches_status.sql for program statuses";
-    if (!hasWarnedBatchStatusSchema) {
-      showToast("Run supabase/batches_status.sql so program status persists.");
-      hasWarnedBatchStatusSchema = true;
-    }
+    remoteStatus = "Supabase synced - run supabase/production_schema_update.sql";
   }
   if (!supportsNormalizedSessions && (state.programs.some((program) => (program.sessionTemplates || []).length) || state.courses.some((course) => (course.sessions || []).length))) {
-    remoteStatus = "Supabase synced - run normalized_sessions_attendance.sql";
-    if (!hasWarnedNormalizedSessionsSchema) {
-      showToast("Run supabase/normalized_sessions_attendance.sql for normalized sessions and attendance.");
-      hasWarnedNormalizedSessionsSchema = true;
-    }
+    remoteStatus = "Supabase synced - run supabase/production_schema_update.sql";
   }
   const teacherRows = state.teachers.map((teacher) => ({
     id: teacher.id,
