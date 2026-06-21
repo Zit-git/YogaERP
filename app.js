@@ -245,7 +245,7 @@ async function detectNormalizedSessionsSupport() {
 
 async function detectTeacherProfileFieldsSupport() {
   if (!supabaseClient) return;
-  const { error } = await supabaseClient.from("teachers").select("contact_number,education,gender,marital_status").limit(1);
+  const { error } = await supabaseClient.from("teachers").select("title,first_name,last_name,contact_number,education,gender,marital_status").limit(1);
   supportsTeacherProfileFields = !error;
 }
 
@@ -347,19 +347,25 @@ async function loadRelationalData() {
       sessionTemplates: normalizedCourseTemplates(courseTemplatesByProgram.get(program.id), program.session_templates || []),
       teacherIds: program.teacher_ids || []
     })),
-    teachers: teachers.map((teacher) => ({
-      id: teacher.id,
-      name: teacher.name,
-      speciality: teacher.speciality || "",
-      phone: teacher.phone || "",
-      email: teacher.email || "",
-      photo: teacher.photo || "",
-      contactNumber: teacher.contact_number || "",
-      education: teacher.education || "",
-      gender: teacher.gender || "",
-      maritalStatus: teacher.marital_status || "",
-      notes: teacher.notes || ""
-    })),
+    teachers: teachers.map((teacher) => {
+      const splitName = splitTeacherName(teacher.name);
+      return {
+        id: teacher.id,
+        title: teacher.title || "",
+        firstName: teacher.first_name || splitName.firstName,
+        lastName: teacher.last_name || splitName.lastName,
+        name: teacher.name,
+        speciality: teacher.speciality || "",
+        phone: teacher.phone || "",
+        email: teacher.email || "",
+        photo: teacher.photo || "",
+        contactNumber: teacher.contact_number || "",
+        education: teacher.education || "",
+        gender: teacher.gender || "",
+        maritalStatus: teacher.marital_status || "",
+        notes: teacher.notes || ""
+      };
+    }),
     halls: halls.map((hall) => ({
       id: hall.id,
       name: hall.name,
@@ -532,7 +538,7 @@ async function syncRelationalTables() {
   if (!supportsNormalizedSessions && (state.programs.some((program) => (program.sessionTemplates || []).length) || state.courses.some((course) => (course.sessions || []).length))) {
     remoteStatus = "Supabase synced - run supabase/production_schema_update.sql";
   }
-  if (!supportsTeacherProfileFields && state.teachers.some((teacher) => teacher.contactNumber || teacher.education || teacher.gender || teacher.maritalStatus)) {
+  if (!supportsTeacherProfileFields && state.teachers.some((teacher) => teacher.title || teacher.firstName || teacher.lastName || teacher.contactNumber || teacher.education || teacher.gender || teacher.maritalStatus)) {
     remoteStatus = "Supabase synced - run supabase/production_schema_update.sql";
   }
   const teacherRows = state.teachers.map((teacher) => ({
@@ -549,6 +555,9 @@ async function syncRelationalTables() {
     const teacher = state.teachers[index];
     return {
       ...row,
+      title: teacher.title || "",
+      first_name: teacher.firstName || "",
+      last_name: teacher.lastName || "",
       contact_number: teacher.contactNumber || "",
       education: teacher.education || "",
       gender: teacher.gender || "",
@@ -750,6 +759,11 @@ function migrateState() {
     }
   });
   state.teachers.forEach((teacher) => {
+    const splitName = splitTeacherName(teacher.name || "");
+    teacher.title ||= "";
+    teacher.firstName ||= splitName.firstName;
+    teacher.lastName ||= splitName.lastName;
+    teacher.name = teacherDisplayName(teacher);
     teacher.photo ||= "";
     teacher.contactNumber ||= "";
     teacher.education ||= "";
@@ -903,7 +917,7 @@ function allRegistrationRows() {
 }
 
 function teacherByName(name) {
-  return state.teachers.find((teacher) => teacher.name === name) || null;
+  return assignableTeachers().find((teacher) => teacherDisplayName(teacher) === name || teacher.name === name) || null;
 }
 
 function teacherById(teacherId) {
@@ -921,8 +935,12 @@ function assignableTeachers() {
         return;
       }
       const virtualId = user.linked_teacher_id || user.user_id;
+      const splitName = splitTeacherName(user.display_name || user.login_email || "Teacher");
       teachers.set(virtualId, {
         id: virtualId,
+        title: "",
+        firstName: splitName.firstName,
+        lastName: splitName.lastName,
         name: user.display_name || user.login_email || "Teacher",
         speciality: roleById(user.role_id)?.name || "Faculty",
         phone: "",
@@ -940,7 +958,8 @@ function assignableTeachers() {
 }
 
 function teacherNameById(teacherId) {
-  return assignableTeachers().find((teacher) => teacher.id === teacherId)?.name || "";
+  const teacher = assignableTeachers().find((teacher) => teacher.id === teacherId);
+  return teacher ? teacherDisplayName(teacher) : "";
 }
 
 function mappedTeachersForProgram(programId) {
@@ -1046,8 +1065,20 @@ function registrationRowsForCourse(courseId) {
 
 function teacherPhoto(teacher) {
   if (teacher.photo) return teacher.photo;
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="180" viewBox="0 0 160 180"><rect width="160" height="180" rx="18" fill="#dff3ef"/><circle cx="80" cy="62" r="34" fill="#0f766e" opacity=".9"/><path d="M30 154c8-36 30-55 50-55s42 19 50 55" fill="#115e59" opacity=".72"/><text x="80" y="70" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" font-weight="700" fill="white">${initials(teacher.name)}</text></svg>`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="180" viewBox="0 0 160 180"><rect width="160" height="180" rx="18" fill="#dff3ef"/><circle cx="80" cy="62" r="34" fill="#0f766e" opacity=".9"/><path d="M30 154c8-36 30-55 50-55s42 19 50 55" fill="#115e59" opacity=".72"/><text x="80" y="70" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" font-weight="700" fill="white">${initials(teacherDisplayName(teacher))}</text></svg>`;
   return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+}
+
+function splitTeacherName(name = "") {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  return {
+    firstName: parts[0] || "",
+    lastName: parts.slice(1).join(" ")
+  };
+}
+
+function teacherDisplayName(teacher) {
+  return [teacher.title, teacher.firstName, teacher.lastName].filter(Boolean).join(" ").trim() || teacher.name || "Teacher";
 }
 
 function initials(name) {
@@ -2255,7 +2286,7 @@ function renderProgramDetail() {
       <div class="teacher-association-list">
         ${associatedTeachers.length ? associatedTeachers.map((teacher) => `
           <button class="teacher-association-pill" type="button" ${teacher.isVirtual ? "" : `data-linked-teacher="${teacher.id}"`}>
-            <strong>${teacher.name}</strong>
+            <strong>${teacherDisplayName(teacher)}</strong>
             <span>${teacher.speciality || "Faculty"}${teacher.isVirtual ? " | active user" : ""}</span>
           </button>
         `).join("") : `<span class="muted">No teachers are associated with this course yet. Edit Course to add teachers.</span>`}
@@ -2321,25 +2352,26 @@ function renderTeachers() {
   const layout = document.querySelector(".teachers-master-layout");
   if (layout) layout.classList.toggle("detail-open", openDetailView.teachers);
   const columns = [
-    { key: "name", label: "Teacher", value: (teacher) => teacher.name },
+    { key: "name", label: "Teacher", value: (teacher) => teacherDisplayName(teacher) },
     { key: "speciality", label: "Speciality", value: (teacher) => teacher.speciality },
     { key: "contact", label: "Contact", value: (teacher) => `${teacher.phone} ${teacher.contactNumber} ${teacher.email}` },
-    { key: "programs", label: "Programs", value: (teacher) => state.courses.filter((course) => course.teacher === teacher.name).length },
+    { key: "programs", label: "Programs", value: (teacher) => state.courses.filter((course) => course.teacher === teacherDisplayName(teacher) || course.teacher === teacher.name).length },
     { key: "actions", label: "Actions", value: () => "", sort: false, filter: false }
   ];
   ensureTableChrome("teacherRows", "teachers", columns);
   const result = tableRows("teachers", teachers, columns, {
-    name: (a, b) => a.name.localeCompare(b.name),
+    name: (a, b) => teacherDisplayName(a).localeCompare(teacherDisplayName(b)),
     speciality: (a, b) => a.speciality.localeCompare(b.speciality),
     contact: (a, b) => a.email.localeCompare(b.email),
-    programs: (a, b) => state.courses.filter((course) => course.teacher === a.name).length - state.courses.filter((course) => course.teacher === b.name).length
+    programs: (a, b) => state.courses.filter((course) => course.teacher === teacherDisplayName(a) || course.teacher === a.name).length - state.courses.filter((course) => course.teacher === teacherDisplayName(b) || course.teacher === b.name).length
   });
   $("#teacherRows").innerHTML = result.rows.map((teacher) => {
-    const programs = state.courses.filter((course) => course.teacher === teacher.name);
+    const displayName = teacherDisplayName(teacher);
+    const programs = state.courses.filter((course) => course.teacher === displayName || course.teacher === teacher.name);
     return `
       <tr class="teacher-master-row ${teacher.id === selectedTeacherId ? "participant-row-selected" : ""}" data-teacher-view="${teacher.id}" tabindex="0">
         ${renderSelectionCell("teachers", teacher.id)}
-        <td><strong>${teacher.name}</strong><br><span class="muted">${teacher.email}</span></td>
+        <td><strong>${displayName}</strong><br><span class="muted">${teacher.email}</span></td>
         <td>${teacher.speciality}</td>
         <td>${teacher.phone || "No phone"}<br><span class="muted">${teacher.email || "No email"}${teacher.contactNumber ? ` | ${teacher.contactNumber}` : ""}</span></td>
         <td>${programs.length ? programs.map((course) => `<span class="pill">${course.name}</span>`).join(" ") : "<span class=\"muted\">No programs assigned</span>"}</td>
@@ -2357,15 +2389,16 @@ function renderTeachers() {
     $("#teacherDetail").innerHTML = `<p class="muted">No teachers recorded yet.</p>`;
     return;
   }
-  const conducted = state.courses.filter((course) => course.teacher === selected.name);
+  const selectedDisplayName = teacherDisplayName(selected);
+  const conducted = state.courses.filter((course) => course.teacher === selectedDisplayName || course.teacher === selected.name);
   $("#teacherDetail").innerHTML = `
     ${backLinkHtml()}
     <div class="profile-card">
-      <img class="profile-photo" src="${teacherPhoto(selected)}" alt="${selected.name} profile photo">
+      <img class="profile-photo" src="${teacherPhoto(selected)}" alt="${selectedDisplayName} profile photo">
       <div class="profile-summary">
         <div class="participant-detail-heading">
           <div>
-            <h3>${selected.name}</h3>
+            <h3>${selectedDisplayName}</h3>
             <p class="muted">${[selected.email, selected.phone, selected.contactNumber].filter(Boolean).join(" | ") || "Contact details not captured"}</p>
           </div>
           <span class="pill">${conducted.length} program(s)</span>
@@ -2376,6 +2409,9 @@ function renderTeachers() {
       </div>
     </div>
     <div class="detail-grid">
+      <div class="detail-item"><span>Title</span><strong>${selected.title || "No title"}</strong></div>
+      <div class="detail-item"><span>First Name</span><strong>${selected.firstName || "Not captured"}</strong></div>
+      <div class="detail-item"><span>Last Name</span><strong>${selected.lastName || "Not captured"}</strong></div>
       <div class="detail-item"><span>Phone</span><strong>${selected.phone}</strong></div>
       <div class="detail-item"><span>Email</span><strong>${selected.email}</strong></div>
       <div class="detail-item"><span>Contact Number</span><strong>${selected.contactNumber || "Not captured"}</strong></div>
@@ -2869,7 +2905,7 @@ function renderAccessManagement() {
     .filter((role) => role.active)
     .map((role) => `<option value="${role.id}">${role.name}</option>`)
     .join("");
-  $("#accessUserTeacherSelect").innerHTML = `<option value="">No teacher link</option>${state.teachers.map((teacher) => `<option value="${teacher.id}">${teacher.name}</option>`).join("")}`;
+  $("#accessUserTeacherSelect").innerHTML = `<option value="">No teacher link</option>${state.teachers.map((teacher) => `<option value="${teacher.id}">${teacherDisplayName(teacher)}</option>`).join("")}`;
   $("#accessUserParticipantSelect").innerHTML = `<option value="">No participant link</option>${state.participants.map((participant) => `<option value="${participant.id}">${participant.name}</option>`).join("")}`;
 }
 
@@ -2970,7 +3006,7 @@ function renderProgramTeacherOptions(selectedIds = []) {
   $("#programTeacherOptions").innerHTML = assignableTeachers().map((teacher) => `
     <label class="multi-select-option">
       <input type="checkbox" value="${teacher.id}" data-program-teacher-option ${selected.has(teacher.id) ? "checked" : ""}>
-      <span>${teacher.name}${teacher.isVirtual ? " (active user)" : ""}</span>
+      <span>${teacherDisplayName(teacher)}${teacher.isVirtual ? " (active user)" : ""}</span>
     </label>
   `).join("") || `<span class="muted">No teachers available.</span>`;
   syncProgramTeacherSelection();
@@ -2987,7 +3023,10 @@ function renderBatchTeacherOptions(selectedTeacherName = "") {
   const programId = $("#batchProgramSelect")?.value || "";
   const teachers = teachersForProgram(programId);
   $("#batchTeacherSelect").innerHTML = teachers.length
-    ? teachers.map((teacher) => `<option value="${teacher.name}" ${teacher.name === selectedTeacherName ? "selected" : ""}>${teacher.name}</option>`).join("")
+    ? teachers.map((teacher) => {
+      const name = teacherDisplayName(teacher);
+      return `<option value="${name}" ${name === selectedTeacherName ? "selected" : ""}>${name}</option>`;
+    }).join("")
     : `<option value="">No teachers associated with this course</option>`;
 }
 
@@ -3174,7 +3213,9 @@ function openTeacherDialog(teacherId = "") {
     const teacher = state.teachers.find((item) => item.id === teacherId);
     if (!teacher) return;
     $("#teacherDialogTitle").textContent = "Edit Teacher Profile";
-    form.elements.name.value = teacher.name;
+    form.elements.title.value = teacher.title || "";
+    form.elements.firstName.value = teacher.firstName || splitTeacherName(teacher.name).firstName;
+    form.elements.lastName.value = teacher.lastName || splitTeacherName(teacher.name).lastName;
     form.elements.speciality.value = teacher.speciality;
     form.elements.phone.value = teacher.phone;
     form.elements.contactNumber.value = teacher.contactNumber || "";
@@ -3361,6 +3402,7 @@ async function saveAccessUser(form) {
     linkedTeacherId = `teacher-${userId}`;
   }
   if (isTeacherRole(roleId) && linkedTeacherId) {
+    const splitName = splitTeacherName(data.get("displayName").trim());
     const teacherPayload = {
       id: linkedTeacherId,
       name: data.get("displayName").trim(),
@@ -3373,6 +3415,9 @@ async function saveAccessUser(form) {
     };
     if (supportsTeacherProfileFields) {
       Object.assign(teacherPayload, {
+        title: "",
+        first_name: splitName.firstName,
+        last_name: splitName.lastName,
         contact_number: "",
         education: "",
         gender: "",
@@ -3387,6 +3432,9 @@ async function saveAccessUser(form) {
     const existingTeacher = state.teachers.find((teacher) => teacher.id === linkedTeacherId);
     const teacherState = {
       id: teacherPayload.id,
+      title: teacherPayload.title || "",
+      firstName: teacherPayload.first_name || splitName.firstName,
+      lastName: teacherPayload.last_name || splitName.lastName,
       name: teacherPayload.name,
       speciality: teacherPayload.speciality,
       phone: teacherPayload.phone,
@@ -4417,9 +4465,15 @@ function bindEvents() {
     if (event.submitter?.value === "cancel") return;
     event.preventDefault();
     const form = new FormData(event.currentTarget);
+    const title = form.get("title");
+    const firstName = form.get("firstName").trim();
+    const lastName = form.get("lastName").trim();
     const teacherData = {
       id: form.get("id") || newId("teacher"),
-      name: form.get("name").trim(),
+      title,
+      firstName,
+      lastName,
+      name: [title, firstName, lastName].filter(Boolean).join(" ").trim(),
       speciality: form.get("speciality").trim(),
       phone: form.get("phone").trim(),
       contactNumber: form.get("contactNumber").trim(),

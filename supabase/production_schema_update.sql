@@ -1,4 +1,7 @@
 alter table public.teachers
+  add column if not exists title text,
+  add column if not exists first_name text,
+  add column if not exists last_name text,
   add column if not exists contact_number text,
   add column if not exists education text,
   add column if not exists gender text,

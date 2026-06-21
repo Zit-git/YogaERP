@@ -1,6 +1,9 @@
 create table if not exists public.teachers (
   id text primary key,
   name text not null,
+  title text,
+  first_name text,
+  last_name text,
   speciality text,
   phone text,
   email text,

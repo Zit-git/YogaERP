@@ -546,7 +546,19 @@
         </div>
         <input type="hidden" name="id">
         <div class="form-grid">
-          <label>Name<input name="name" placeholder="Teacher name" required></label>
+          <label>Title
+            <select name="title">
+              <option value="">No title</option>
+              <option>Mr</option>
+              <option>Mrs</option>
+              <option>Ms</option>
+              <option>Shri</option>
+              <option>SMT</option>
+              <option>Dr</option>
+            </select>
+          </label>
+          <label>First Name<input name="firstName" placeholder="First name" required></label>
+          <label>Last Name<input name="lastName" placeholder="Last name"></label>
           <label>Speciality<input name="speciality" placeholder="Yoga therapy, SKY, meditation" required></label>
           <label>Phone<input name="phone" required></label>
           <label>Contact Number<input name="contactNumber" placeholder="Alternate contact number"></label>
@@ -699,6 +711,6 @@
     <div id="toast" role="status" aria-live="polite"></div>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="supabase-config.js?v=35"></script>
-    <script src="app.js?v=97"></script>
+    <script src="app.js?v=98"></script>
   </body>
 </html>
