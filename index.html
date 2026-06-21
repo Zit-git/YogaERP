@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Aliyar Program Management</title>
     <link rel="icon" href="favicon.svg" type="image/svg+xml">
-    <link rel="stylesheet" href="styles.css?v=51">
+    <link rel="stylesheet" href="styles.css?v=52">
   </head>
   <body>
     <aside class="sidebar" aria-label="Primary navigation">
@@ -306,14 +306,16 @@
             <p>Manage blocks, floors, rooms, bed capacity, and arrival readiness.</p>
           </div>
           <div class="row-actions">
-            <button class="primary-button" id="addAccommodationRecord" type="button">Add Record</button>
             <button class="secondary-button" id="autoAssign" type="button">Auto Assign Rooms</button>
           </div>
         </div>
-        <div class="segmented subnav" id="accommodationTabs">
-          <button class="is-selected" data-accommodation-tab="blocks" type="button">Blocks</button>
-          <button data-accommodation-tab="floors" type="button">Floors</button>
-          <button data-accommodation-tab="rooms" type="button">Rooms</button>
+        <div class="subnav-row">
+          <div class="segmented subnav" id="accommodationTabs">
+            <button class="is-selected" data-accommodation-tab="blocks" type="button">Blocks</button>
+            <button data-accommodation-tab="floors" type="button">Floors</button>
+            <button data-accommodation-tab="rooms" type="button">Rooms</button>
+          </div>
+          <button class="primary-button" id="addAccommodationRecord" type="button">Add Block</button>
         </div>
         <div id="accommodationContent"></div>
       </section>
@@ -680,6 +682,6 @@
     <div id="toast" role="status" aria-live="polite"></div>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="supabase-config.js?v=35"></script>
-    <script src="app.js?v=90"></script>
+    <script src="app.js?v=91"></script>
   </body>
 </html>

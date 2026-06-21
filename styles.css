@@ -1460,6 +1460,18 @@ tr:last-child td { border-bottom: 0; }
   margin-bottom: 14px;
 }
 
+.subnav-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.subnav-row .subnav {
+  margin-bottom: 0;
+}
+
 .room-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(220px, 1fr));

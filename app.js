@@ -2633,6 +2633,14 @@ function renderRooms() {
   renderTablePagination("accommodation-floors", floorResult);
   renderTablePagination("accommodation-rooms", roomResult);
   $$("#accommodationTabs button").forEach((button) => button.classList.toggle("is-selected", button.dataset.accommodationTab === accommodationTab));
+  const addButton = $("#addAccommodationRecord");
+  if (addButton) {
+    addButton.textContent = {
+      blocks: "Add Block",
+      floors: "Add Floor",
+      rooms: "Add Room"
+    }[accommodationTab] || "Add Record";
+  }
 }
 
 function renderHalls() {
