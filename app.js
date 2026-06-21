@@ -355,7 +355,7 @@ async function loadRelationalData() {
     blocks: blocks.map((block) => ({
       id: block.id,
       name: block.name,
-      gender: block.gender || "",
+      gender: "",
       notes: block.notes || ""
     })),
     floors: floors.map((floor) => ({
@@ -538,7 +538,7 @@ async function syncRelationalTables() {
   const blockRows = state.blocks.map((block) => ({
     id: block.id,
     name: block.name,
-    gender: block.gender || "",
+    gender: "",
     notes: block.notes || "",
     updated_at: now
   }));
@@ -1347,12 +1347,13 @@ function bulkFieldDefinitions(key) {
       { name: "roomId", label: "Room", type: "select", options: [{ value: "", label: "Not assigned" }, ...state.rooms.map((room) => ({ value: room.id, label: room.name }))] }
     ],
     "accommodation-blocks": [
-      { name: "gender", label: "Gender", type: "text" }
+      { name: "notes", label: "Notes", type: "text" }
     ],
     "accommodation-floors": [
       { name: "blockId", label: "Block", type: "select", options: state.blocks.map((block) => ({ value: block.id, label: block.name })) }
     ],
     "accommodation-rooms": [
+      { name: "floorId", label: "Floor", type: "select", options: state.floors.map((floor) => ({ value: floor.id, label: `${floor.name} - ${blockName(floor.blockId)}` })) },
       { name: "gender", label: "Room Type", type: "text" },
       { name: "beds", label: "Beds", type: "number" }
     ],
@@ -1518,7 +1519,12 @@ async function applyBulkEdit(form) {
     if (key === "accommodation-rooms") {
       const item = state.rooms.find((room) => room.id === id);
       if (!item) return;
-      if (field === "beds") item.beds = Number(value) || item.beds;
+      if (field === "floorId") {
+        const floor = state.floors.find((floorItem) => floorItem.id === value);
+        if (!floor) return;
+        item.floorId = value;
+        item.blockId = floor.blockId;
+      } else if (field === "beds") item.beds = Number(value) || item.beds;
       else item[field] = value;
     }
     if (key === "halls") {
@@ -1658,6 +1664,20 @@ function renderTablePagination(key, result) {
 }
 
 function newId(prefix) {
+  const sequenceConfig = {
+    program: { prefix: "COURSE", records: () => state.programs },
+    course: { prefix: "PROG", records: () => state.courses },
+    registration: { prefix: "REG", records: () => allRegistrationRows().map(({ registration }) => registration) },
+    participant: { prefix: "PART", records: () => state.participants }
+  }[prefix];
+  if (sequenceConfig) {
+    const matcher = new RegExp(`^${sequenceConfig.prefix}-(\\d+)$`);
+    const max = sequenceConfig.records()
+      .map((record) => String(record.id || "").match(matcher))
+      .filter(Boolean)
+      .reduce((highest, match) => Math.max(highest, Number(match[1]) || 0), 0);
+    return `${sequenceConfig.prefix}-${String(max + 1).padStart(4, "0")}`;
+  }
   if (crypto.randomUUID) return crypto.randomUUID();
   return `${prefix}-${Date.now()}-${Math.round(Math.random() * 10000)}`;
 }
@@ -1937,7 +1957,6 @@ function renderBatchDetail() {
   const teacher = teacherByName(course.teacher);
   const status = course.status || programLifecycleStatus(course);
   const showBatchActions = canManageMasters();
-  const showRegistrationAction = currentSession.role !== "participant" && status !== "Completed";
   const allowAttendance = canMarkAttendance();
   $("#batchDetail").innerHTML = `
     <button class="secondary-button link-back-button" type="button" data-record-back="courses">Back to Programs</button>
@@ -1949,8 +1968,6 @@ function renderBatchDetail() {
       </div>
       <div class="row-actions">
         ${showBatchActions ? `<button class="secondary-button" type="button" data-course-edit="${course.id}">Edit Program</button><button class="danger-button" type="button" data-course-delete="${course.id}">Delete Program</button>` : ""}
-        ${showBatchActions ? `<button class="primary-button" type="button" data-apply-course-sessions="${course.id}">Apply Course Sessions</button>` : ""}
-        ${showRegistrationAction ? `<button class="secondary-button" type="button" data-course-register="${course.id}">Register Participant</button>` : ""}
       </div>
     </div>
     <div class="course-meta detail-meta">
@@ -2495,7 +2512,6 @@ function renderRegistrations() {
 function renderRooms() {
   const blockColumns = [
     { key: "name", label: "Block", value: (block) => block.name },
-    { key: "gender", label: "Gender", value: (block) => block.gender },
     { key: "floors", label: "Floors", value: (block) => state.floors.filter((floor) => floor.blockId === block.id).length },
     { key: "rooms", label: "Rooms", value: (block) => state.rooms.filter((room) => room.blockId === block.id).length },
     { key: "actions", label: "Actions", value: () => "", sort: false, filter: false }
@@ -2516,7 +2532,6 @@ function renderRooms() {
   ];
   const blockResult = tableRows("accommodation-blocks", state.blocks, blockColumns, {
     name: (a, b) => a.name.localeCompare(b.name),
-    gender: (a, b) => a.gender.localeCompare(b.gender),
     floors: (a, b) => state.floors.filter((floor) => floor.blockId === a.id).length - state.floors.filter((floor) => floor.blockId === b.id).length,
     rooms: (a, b) => state.rooms.filter((room) => room.blockId === a.id).length - state.rooms.filter((room) => room.blockId === b.id).length
   });
@@ -2526,7 +2541,6 @@ function renderRooms() {
     return `<tr>
       ${renderSelectionCell("accommodation-blocks", block.id)}
       <td><strong>${block.name}</strong><br><span class="muted">${block.notes || "No notes"}</span></td>
-      <td>${block.gender}</td>
       <td>${floors}</td>
       <td>${rooms}</td>
       <td><div class="row-actions"><button class="secondary-button" type="button" data-block-edit="${block.id}">Edit</button><button class="danger-button" type="button" data-block-delete="${block.id}">Delete</button></div></td>
@@ -2566,27 +2580,33 @@ function renderRooms() {
       <td><div class="row-actions"><button class="secondary-button" type="button" data-room-edit="${room.id}">Edit</button><button class="danger-button" type="button" data-room-delete="${room.id}">Delete</button></div></td>
     </tr>`;
   }).join("");
-  $("#accommodationContent").innerHTML = accommodationTab === "blocks" ? `
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>Block</th><th>Gender</th><th>Floors</th><th>Rooms</th><th>Actions</th></tr></thead>
-        <tbody id="accommodationBlockRows">${blockRows}</tbody>
-      </table>
-    </div>
-  ` : `
-    <div class="table-wrap accommodation-subtable">
-      <table>
-        <thead><tr><th>Floor</th><th>Block</th><th>Rooms</th><th>Actions</th></tr></thead>
-        <tbody id="accommodationFloorRows">${floorRows}</tbody>
-      </table>
-    </div>
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>Room</th><th>Block</th><th>Floor</th><th>Type</th><th>Occupancy</th><th>Actions</th></tr></thead>
-        <tbody id="accommodationRoomRows">${roomRows}</tbody>
-      </table>
-    </div>
-  `;
+  const contentByTab = {
+    blocks: `
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Block</th><th>Floors</th><th>Rooms</th><th>Actions</th></tr></thead>
+          <tbody id="accommodationBlockRows">${blockRows}</tbody>
+        </table>
+      </div>
+    `,
+    floors: `
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Floor</th><th>Block</th><th>Rooms</th><th>Actions</th></tr></thead>
+          <tbody id="accommodationFloorRows">${floorRows}</tbody>
+        </table>
+      </div>
+    `,
+    rooms: `
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Room</th><th>Block</th><th>Floor</th><th>Type</th><th>Occupancy</th><th>Actions</th></tr></thead>
+          <tbody id="accommodationRoomRows">${roomRows}</tbody>
+        </table>
+      </div>
+    `
+  };
+  $("#accommodationContent").innerHTML = contentByTab[accommodationTab] || contentByTab.blocks;
   ensureTableChrome("accommodationBlockRows", "accommodation-blocks", blockColumns);
   ensureTableChrome("accommodationFloorRows", "accommodation-floors", floorColumns);
   ensureTableChrome("accommodationRoomRows", "accommodation-rooms", roomColumns);
@@ -3055,17 +3075,16 @@ function addOrEditBlock(blockId = "") {
   const block = state.blocks.find((item) => item.id === blockId);
   openRecordDialog("block", blockId, "Accommodation", block ? "Edit Block" : "Add Block", [
     ["name", "Block Name", block?.name || "", "text"],
-    ["gender", "Gender Type", block?.gender || "Female", "text"],
     ["notes", "Notes", block?.notes || "", "textarea"]
   ]);
 }
 
 function addOrEditRoom(roomId = "") {
   const room = state.rooms.find((item) => item.id === roomId);
+  const floorOptions = state.floors.map((floor) => ({ value: floor.id, label: `${floor.name} - ${blockName(floor.blockId)}` }));
   openRecordDialog("room", roomId, "Accommodation", room ? "Edit Room" : "Add Room", [
     ["name", "Room Name", room?.name || "", "text"],
-    ["blockId", "Block ID", room?.blockId || state.blocks[0]?.id || "", "text", state.blocks.map((block) => `${block.id}: ${block.name}`).join(" | ")],
-    ["floorId", "Floor ID", room?.floorId || state.floors[0]?.id || "", "text", state.floors.map((floor) => `${floor.id}: ${floor.name}`).join(" | ")],
+    ["floorId", "Floor", room?.floorId || state.floors[0]?.id || "", "select", floorOptions.length ? floorOptions : [{ value: "", label: "Create a floor first" }]],
     ["gender", "Room Type", room?.gender || "Female", "text"],
     ["beds", "Beds", room?.beds || "4", "number"]
   ]);
@@ -3073,9 +3092,10 @@ function addOrEditRoom(roomId = "") {
 
 function addOrEditFloor(floorId = "") {
   const floor = state.floors.find((item) => item.id === floorId);
+  const blockOptions = state.blocks.map((block) => ({ value: block.id, label: block.name }));
   openRecordDialog("floor", floorId, "Accommodation", floor ? "Edit Floor" : "Add Floor", [
     ["name", "Floor Name", floor?.name || "", "text"],
-    ["blockId", "Block ID", floor?.blockId || state.blocks[0]?.id || "", "text", state.blocks.map((block) => `${block.id}: ${block.name}`).join(" | ")]
+    ["blockId", "Block", floor?.blockId || state.blocks[0]?.id || "", "select", blockOptions.length ? blockOptions : [{ value: "", label: "Create a block first" }]]
   ]);
 }
 
@@ -3370,6 +3390,10 @@ function openRecordDialog(mode, id, eyebrow, title, fields) {
     if (type === "textarea") {
       return `<label class="wide">${label}<textarea name="${name}" rows="3">${value}</textarea>${helpText}</label>`;
     }
+    if (type === "select") {
+      const options = Array.isArray(help) ? help : [];
+      return `<label>${label}<select name="${name}" required>${options.map((option) => `<option value="${option.value}" ${option.value === value ? "selected" : ""}>${option.label}</option>`).join("")}</select>${Array.isArray(help) ? "" : helpText}</label>`;
+    }
     return `<label>${label}<input name="${name}" type="${type}" value="${value}" required>${helpText}</label>`;
   }).join("");
   $("#recordDialog").showModal();
@@ -3381,19 +3405,29 @@ function saveRecordForm(form) {
   const id = data.get("id");
   if (mode === "block") {
     const record = state.blocks.find((item) => item.id === id);
-    const payload = { name: data.get("name").trim(), gender: data.get("gender").trim(), notes: data.get("notes").trim() };
+    const payload = { name: data.get("name").trim(), gender: record?.gender || "", notes: data.get("notes").trim() };
     if (record) Object.assign(record, payload);
     else state.blocks.push({ id: newId("block"), ...payload });
   }
   if (mode === "floor") {
     const record = state.floors.find((item) => item.id === id);
+    if (!data.get("blockId")) {
+      showToast("Create a block before adding floors.");
+      return;
+    }
     const payload = { name: data.get("name").trim(), blockId: data.get("blockId").trim() };
     if (record) Object.assign(record, payload);
     else state.floors.push({ id: newId("floor"), ...payload });
   }
   if (mode === "room") {
     const record = state.rooms.find((item) => item.id === id);
-    const payload = { name: data.get("name").trim(), blockId: data.get("blockId").trim(), floorId: data.get("floorId").trim(), gender: data.get("gender").trim(), beds: Number(data.get("beds")) || 1 };
+    const floorId = data.get("floorId").trim();
+    const floor = state.floors.find((item) => item.id === floorId);
+    if (!floor) {
+      showToast("Create a floor before adding rooms.");
+      return;
+    }
+    const payload = { name: data.get("name").trim(), blockId: floor.blockId, floorId, gender: data.get("gender").trim(), beds: Number(data.get("beds")) || 1 };
     if (record) Object.assign(record, payload);
     else state.rooms.push({ id: newId("room"), ...payload });
   }
@@ -3575,9 +3609,11 @@ function bindEvents() {
       addOrEditBlock();
       return;
     }
-    const type = (window.prompt("Add Floor or Room?", "Room") || "").toLowerCase();
-    if (type.startsWith("f")) addOrEditFloor();
-    else addOrEditRoom();
+    if (accommodationTab === "floors") {
+      addOrEditFloor();
+      return;
+    }
+    addOrEditRoom();
   });
   $("#addHall").addEventListener("click", () => canManageMasters() && addOrEditHall());
   $("#addHallBooking").addEventListener("click", () => canManageMasters() && addOrEditHallBooking());
@@ -3988,12 +4024,6 @@ function bindEvents() {
     if (deleteProgramSessionButton) {
       if (!canManageMasters()) return;
       deleteProgramSession(deleteProgramSessionButton.dataset.programSessionDelete, deleteProgramSessionButton.dataset.sessionTemplateId);
-      return;
-    }
-    const applyCourseSessionsButton = event.target.closest("[data-apply-course-sessions]");
-    if (applyCourseSessionsButton) {
-      if (!canManageMasters()) return;
-      applyCourseSessionPlan(applyCourseSessionsButton.dataset.applyCourseSessions);
       return;
     }
     const editAccessUser = event.target.closest("[data-access-user-edit]");
