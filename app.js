@@ -40,6 +40,7 @@ let openDetailView = { courses: false, programs: false, teachers: false, partici
 const tableState = {};
 const bulkSelections = {};
 const tablePageSize = 8;
+const roomTypes = ["Single Occupancy", "Double Occupancy", "Dormitory"];
 
 const views = [
   ["portal", "Portal"],
@@ -368,7 +369,7 @@ async function loadRelationalData() {
       blockId: room.block_id || "",
       floorId: room.floor_id || "",
       name: room.name,
-      gender: room.gender || "",
+      gender: normalizeRoomType(room.gender),
       beds: Number(room.beds) || 1
     })),
     courses: batches.map((batch) => {
@@ -553,7 +554,7 @@ async function syncRelationalTables() {
     block_id: room.blockId || null,
     floor_id: room.floorId || null,
     name: room.name,
-    gender: room.gender || "",
+    gender: normalizeRoomType(room.gender),
     beds: Number(room.beds) || 1,
     updated_at: now
   }));
@@ -812,6 +813,15 @@ function floorName(id) {
 
 function hallName(id) {
   return state.halls.find((hall) => hall.id === id)?.name || "No hall";
+}
+
+function normalizeRoomType(value) {
+  return roomTypes.includes(value) ? value : "Dormitory";
+}
+
+function roomTypeOptions(selected = "") {
+  const normalized = normalizeRoomType(selected);
+  return roomTypes.map((type) => ({ value: type, label: type, selected: type === normalized }));
 }
 
 function roomForParticipant(participant) {
@@ -1354,7 +1364,7 @@ function bulkFieldDefinitions(key) {
     ],
     "accommodation-rooms": [
       { name: "floorId", label: "Floor", type: "select", options: state.floors.map((floor) => ({ value: floor.id, label: `${floor.name} - ${blockName(floor.blockId)}` })) },
-      { name: "gender", label: "Room Type", type: "text" },
+      { name: "gender", label: "Room Type", type: "select", options: roomTypes.map((type) => ({ value: type, label: type })) },
       { name: "beds", label: "Beds", type: "number" }
     ],
     halls: [
@@ -1525,6 +1535,7 @@ async function applyBulkEdit(form) {
         item.floorId = value;
         item.blockId = floor.blockId;
       } else if (field === "beds") item.beds = Number(value) || item.beds;
+      else if (field === "gender") item.gender = normalizeRoomType(value);
       else item[field] = value;
     }
     if (key === "halls") {
@@ -3144,7 +3155,7 @@ function addOrEditRoom(roomId = "") {
   openRecordDialog("room", roomId, "Accommodation", room ? "Edit Room" : "Add Room", [
     ["name", "Room Name", room?.name || "", "text"],
     ["floorId", "Floor", room?.floorId || state.floors[0]?.id || "", "select", floorOptions.length ? floorOptions : [{ value: "", label: "Create a floor first" }]],
-    ["gender", "Room Type", room?.gender || "Female", "text"],
+    ["gender", "Room Type", normalizeRoomType(room?.gender), "select", roomTypeOptions(room?.gender)],
     ["beds", "Beds", room?.beds || "4", "number"]
   ]);
 }
@@ -3486,7 +3497,7 @@ function saveRecordForm(form) {
       showToast("Create a floor before adding rooms.");
       return;
     }
-    const payload = { name: data.get("name").trim(), blockId: floor.blockId, floorId, gender: data.get("gender").trim(), beds: Number(data.get("beds")) || 1 };
+    const payload = { name: data.get("name").trim(), blockId: floor.blockId, floorId, gender: normalizeRoomType(data.get("gender")), beds: Number(data.get("beds")) || 1 };
     if (record) Object.assign(record, payload);
     else state.rooms.push({ id: newId("room"), ...payload });
   }
