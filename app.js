@@ -1275,6 +1275,10 @@ function isPortalProgram(course) {
   return programLifecycleStatus(course) === "Upcoming";
 }
 
+function isRegistrationProgram(course) {
+  return programLifecycleStatus(course) !== "Completed";
+}
+
 function showToast(message) {
   const toast = $("#toast");
   toast.textContent = message;
@@ -1461,6 +1465,7 @@ function bulkRegistrantDetails() {
 function openRegistrationDialog(courseId = "") {
   $("#registrationForm").reset();
   $("#bulkRegistrantRows").innerHTML = "";
+  renderCourseOptions();
   if (courseId) $("#courseSelect").value = courseId;
   setRegistrationMode("individual");
   $("#registrationDialog").showModal();
@@ -2807,8 +2812,10 @@ function renderHistory() {
 }
 
 function renderCourseOptions() {
-  const registrationPrograms = state.courses.filter(isPortalProgram);
-  $("#courseSelect").innerHTML = registrationPrograms.map((course) => `<option value="${course.id}">${course.name}</option>`).join("");
+  const registrationPrograms = state.courses.filter(isRegistrationProgram);
+  $("#courseSelect").innerHTML = registrationPrograms.length
+    ? registrationPrograms.map((course) => `<option value="${course.id}">${course.name} (${course.start} to ${course.end})</option>`).join("")
+    : `<option value="">No scheduled programs available</option>`;
   $("#hallSelect").innerHTML = state.halls.length
     ? state.halls.map((hall) => `<option value="${hall.id}">${hall.name} (${hall.capacity})</option>`).join("")
     : `<option value="">No Program Halls available</option>`;
@@ -4102,6 +4109,10 @@ function bindEvents() {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const courseId = form.get("course");
+    if (!state.courses.some((course) => course.id === courseId)) {
+      showToast("Create a scheduled Program before adding registrations.");
+      return;
+    }
     const mode = form.get("registrationMode");
     const registrants = mode === "bulk" ? bulkRegistrantDetails() : [{
       name: form.get("name"),
