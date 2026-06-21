@@ -476,6 +476,18 @@ async function upsertSupabaseRows(tableName, rows) {
   if (upsertResult.error) throw upsertResult.error;
 }
 
+async function deleteSupabaseRow(tableName, id) {
+  if (!supabaseClient || !hasLoadedRemoteData || !id) return;
+  const result = await supabaseClient.from(tableName).delete().eq("id", id);
+  if (result.error) showToast(result.error.message || `Unable to delete from ${tableName}.`);
+}
+
+async function deleteSupabaseWhere(tableName, column, value) {
+  if (!supabaseClient || !hasLoadedRemoteData || !value) return;
+  const result = await supabaseClient.from(tableName).delete().eq(column, value);
+  if (result.error) showToast(result.error.message || `Unable to delete from ${tableName}.`);
+}
+
 async function syncRelationalTables() {
   if (!supabaseClient) return;
   const now = new Date().toISOString();
@@ -3298,11 +3310,16 @@ function applyCourseSessionPlan(courseId, shouldRender = true) {
   }
 }
 
-function deleteProgramSession(programId, sessionId) {
+async function deleteProgramSession(programId, sessionId) {
   const program = state.programs.find((item) => item.id === programId);
   if (!program) return;
+  const affectedCourses = state.courses.filter((course) => course.programId === programId);
   program.sessionTemplates = (program.sessionTemplates || []).filter((session) => session.id !== sessionId);
   applyProgramPlanToBatches(programId);
+  if (supportsNormalizedSessions) {
+    await deleteSupabaseRow("course_session_templates", sessionId);
+    await Promise.all(affectedCourses.map((course) => deleteSupabaseWhere("batch_sessions", "batch_id", course.id)));
+  }
   renderAll();
   showToast("Course session deleted and applied to programs.");
 }
@@ -3388,45 +3405,51 @@ function saveRecordForm(form) {
   showToast("Record saved.");
 }
 
-function deleteBlock(blockId) {
+async function deleteBlock(blockId) {
   if (state.rooms.some((room) => room.blockId === blockId)) {
     showToast("Cannot delete a block with rooms.");
     return;
   }
   state.blocks = state.blocks.filter((block) => block.id !== blockId);
   state.floors = state.floors.filter((floor) => floor.blockId !== blockId);
+  await deleteSupabaseWhere("accommodation_floors", "block_id", blockId);
+  await deleteSupabaseRow("accommodation_blocks", blockId);
   renderAll();
 }
 
-function deleteRoom(roomId) {
+async function deleteRoom(roomId) {
   if (state.participants.some((participant) => currentRegistration(participant)?.roomId === roomId)) {
     showToast("Cannot delete an occupied room.");
     return;
   }
   state.rooms = state.rooms.filter((room) => room.id !== roomId);
+  await deleteSupabaseRow("rooms", roomId);
   renderAll();
 }
 
-function deleteFloor(floorId) {
+async function deleteFloor(floorId) {
   if (state.rooms.some((room) => room.floorId === floorId)) {
     showToast("Cannot delete a floor with rooms.");
     return;
   }
   state.floors = state.floors.filter((floor) => floor.id !== floorId);
+  await deleteSupabaseRow("accommodation_floors", floorId);
   renderAll();
 }
 
-function deleteHall(hallId) {
+async function deleteHall(hallId) {
   if (state.hallBookings.some((booking) => booking.hallId === hallId)) {
     showToast("Cannot delete a hall with bookings.");
     return;
   }
   state.halls = state.halls.filter((hall) => hall.id !== hallId);
+  await deleteSupabaseRow("program_halls", hallId);
   renderAll();
 }
 
-function deleteHallBooking(bookingId) {
+async function deleteHallBooking(bookingId) {
   state.hallBookings = state.hallBookings.filter((booking) => booking.id !== bookingId);
+  await deleteSupabaseRow("hall_bookings", bookingId);
   renderAll();
 }
 
@@ -3453,7 +3476,7 @@ function openProgramDialog(programId = "") {
   $("#programDialog").showModal();
 }
 
-function deleteProgram(programId) {
+async function deleteProgram(programId) {
   const program = state.programs.find((item) => item.id === programId);
   if (!program) return;
   const hasChildren = state.programs.some((item) => item.parentId === programId);
@@ -3467,6 +3490,8 @@ function deleteProgram(programId) {
     return;
   }
   state.programs = state.programs.filter((item) => item.id !== programId);
+  if (supportsNormalizedSessions) await deleteSupabaseWhere("course_session_templates", "program_id", programId);
+  await deleteSupabaseRow("course_masters", programId);
   renderAll();
   showToast("Course deleted.");
 }
