@@ -1151,6 +1151,25 @@ textarea { resize: vertical; }
   vertical-align: top;
 }
 
+.attendance-session-heading {
+  min-width: 152px;
+  display: grid;
+  gap: 5px;
+  align-items: start;
+}
+
+.attendance-session-heading small {
+  color: var(--muted);
+  font-weight: 650;
+  line-height: 1.25;
+}
+
+.compact-action {
+  min-height: 28px;
+  padding: 5px 8px;
+  font-size: 11px;
+}
+
 .attendance-cell {
   min-width: 116px;
   display: grid;
@@ -1163,8 +1182,8 @@ textarea { resize: vertical; }
 }
 
 .attendance-actions {
-  display: grid;
-  grid-template-columns: repeat(3, 30px);
+  display: flex;
+  flex-wrap: wrap;
   gap: 4px;
 }
 
@@ -1176,7 +1195,7 @@ textarea { resize: vertical; }
   color: var(--ink);
   font-size: 12px;
   font-weight: 850;
-  padding: 0;
+  padding: 0 7px;
 }
 
 .attendance-actions button:hover:not(:disabled) {
@@ -1193,6 +1212,7 @@ textarea { resize: vertical; }
 .pill.late { color: var(--warn); background: #fff1df; }
 .pill.absent { color: var(--danger); background: #fee4e2; }
 .pill.mark { color: var(--muted); background: #eef2f6; }
+.pill.pending { color: var(--muted); background: #eef2f6; }
 
 .table-wrap {
   overflow: auto;

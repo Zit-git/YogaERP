@@ -2011,7 +2011,22 @@ function renderBatchDetail() {
           <thead>
             <tr>
               <th>Participant</th>
-              ${sessions.map((session, index) => `<th>S${index + 1}<br><span class="muted">${session.date.slice(5)} | ${session.title}</span></th>`).join("")}
+              ${sessions.map((session, index) => {
+                const stats = attendanceRows.reduce((summary, { registration }) => {
+                  const record = attendanceForSession(registration, session.id);
+                  const status = record?.status || "Pending";
+                  summary[status] = (summary[status] || 0) + 1;
+                  return summary;
+                }, {});
+                return `<th>
+                  <div class="attendance-session-heading">
+                    <strong>S${index + 1}</strong>
+                    <span class="muted">${session.date.slice(5)} | ${session.title}</span>
+                    <small>${stats.Present || 0} present | ${stats.Late || 0} late | ${stats.Absent || 0} absent</small>
+                    ${allowAttendance ? `<button class="secondary-button compact-action" type="button" data-mark-session-present="${session.id}" data-course-id="${course.id}">Mark all Present</button>` : ""}
+                  </div>
+                </th>`;
+              }).join("")}
               <th>Completion</th>
             </tr>
           </thead>
@@ -2022,15 +2037,16 @@ function renderBatchDetail() {
                 ${sessions.map((session) => {
                   const record = attendanceForSession(registration, session.id);
                   const locked = hasEarlierSessionAbsence(registration, session.id);
+                  const status = record?.status || "Pending";
                   return `<td>
                     <div class="attendance-cell">
-                      <span class="pill ${statusClass(record?.status || "mark")}">${record?.status || "Mark"}</span>
+                      <span class="pill ${statusClass(status)}">${status}</span>
                       <small>${session.time}<br>${session.topic}</small>
                       ${record?.reason ? `<small>${record.reason}</small>` : ""}
                       ${allowAttendance ? `<div class="attendance-actions">
-                        <button type="button" data-attendance-status="Present" data-id="${participant.id}" data-registration-id="${registration.id}" data-session-id="${session.id}" onclick="markSessionAttendance('${participant.id}', '${registration.id}', '${session.id}', 'Present')" ${locked ? "disabled" : ""}>P</button>
-                        <button type="button" data-attendance-status="Late" data-id="${participant.id}" data-registration-id="${registration.id}" data-session-id="${session.id}" onclick="markSessionAttendance('${participant.id}', '${registration.id}', '${session.id}', 'Late')" ${locked ? "disabled" : ""}>L</button>
-                        <button type="button" data-attendance-status="Absent" data-id="${participant.id}" data-registration-id="${registration.id}" data-session-id="${session.id}" onclick="markSessionAttendance('${participant.id}', '${registration.id}', '${session.id}', 'Absent')" ${locked ? "disabled" : ""}>A</button>
+                        ${record && record.status !== "Present" ? `<button type="button" data-attendance-status="Present" data-id="${participant.id}" data-registration-id="${registration.id}" data-session-id="${session.id}" ${locked ? "disabled" : ""}>Present</button>` : ""}
+                        <button type="button" data-attendance-status="Late" data-id="${participant.id}" data-registration-id="${registration.id}" data-session-id="${session.id}" ${locked ? "disabled" : ""}>Late</button>
+                        <button type="button" data-attendance-status="Absent" data-id="${participant.id}" data-registration-id="${registration.id}" data-session-id="${session.id}" ${locked ? "disabled" : ""}>Absent</button>
                       </div>` : ""}
                     </div>
                   </td>`;
@@ -3006,6 +3022,39 @@ function markSessionAttendance(participantId, registrationId, sessionId, status,
   }
   renderAll();
   showToast(`${status} marked for ${participant.name}.`);
+}
+
+function markSessionPresentForAll(courseId, sessionId) {
+  if (!canMarkAttendance()) {
+    showToast("Only Teachers and Admins can mark attendance.");
+    return;
+  }
+  let marked = 0;
+  let skipped = 0;
+  registrationRowsForCourse(courseId).forEach(({ participant, registration }) => {
+    if (hasEarlierSessionAbsence(registration, sessionId)) {
+      skipped += 1;
+      return;
+    }
+    const existing = attendanceForSession(registration, sessionId);
+    if (existing?.status === "Late" || existing?.status === "Absent") {
+      skipped += 1;
+      return;
+    }
+    if (existing) {
+      existing.status = "Present";
+      existing.reason = "";
+    } else {
+      registration.sessionAttendance.push({ sessionId, status: "Present", reason: "" });
+    }
+    updateRegistrationCompletion(registration);
+    if (registration === currentRegistration(participant)) {
+      syncParticipantFromRegistration(participant, registration);
+    }
+    marked += 1;
+  });
+  renderAll();
+  showToast(skipped ? `Marked ${marked} present. ${skipped} exception(s) unchanged.` : `Marked ${marked} present.`);
 }
 
 function openAttendanceReasonDialog(participantId, registrationId, sessionId, status) {
@@ -4027,6 +4076,21 @@ function bindEvents() {
     if (deleteProgramSessionButton) {
       if (!canManageMasters()) return;
       deleteProgramSession(deleteProgramSessionButton.dataset.programSessionDelete, deleteProgramSessionButton.dataset.sessionTemplateId);
+      return;
+    }
+    const markSessionPresentButton = event.target.closest("[data-mark-session-present]");
+    if (markSessionPresentButton) {
+      markSessionPresentForAll(markSessionPresentButton.dataset.courseId, markSessionPresentButton.dataset.markSessionPresent);
+      return;
+    }
+    const attendanceButton = event.target.closest("[data-attendance-status]");
+    if (attendanceButton) {
+      markSessionAttendance(
+        attendanceButton.dataset.id,
+        attendanceButton.dataset.registrationId,
+        attendanceButton.dataset.sessionId,
+        attendanceButton.dataset.attendanceStatus
+      );
       return;
     }
     const editAccessUser = event.target.closest("[data-access-user-edit]");
