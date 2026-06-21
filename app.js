@@ -2044,9 +2044,9 @@ function renderBatchDetail() {
                       <small>${session.time}<br>${session.topic}</small>
                       ${record?.reason ? `<small>${record.reason}</small>` : ""}
                       ${allowAttendance ? `<div class="attendance-actions">
-                        ${record && record.status !== "Present" ? `<button type="button" data-attendance-status="Present" data-id="${participant.id}" data-registration-id="${registration.id}" data-session-id="${session.id}" ${locked ? "disabled" : ""}>Present</button>` : ""}
-                        <button type="button" data-attendance-status="Late" data-id="${participant.id}" data-registration-id="${registration.id}" data-session-id="${session.id}" ${locked ? "disabled" : ""}>Late</button>
-                        <button type="button" data-attendance-status="Absent" data-id="${participant.id}" data-registration-id="${registration.id}" data-session-id="${session.id}" ${locked ? "disabled" : ""}>Absent</button>
+                        ${record && record.status !== "Present" ? `<button type="button" title="Mark Present" data-attendance-status="Present" data-id="${participant.id}" data-registration-id="${registration.id}" data-session-id="${session.id}" ${locked ? "disabled" : ""}>P</button>` : ""}
+                        <button type="button" title="Mark Late" data-attendance-status="Late" data-id="${participant.id}" data-registration-id="${registration.id}" data-session-id="${session.id}" ${locked ? "disabled" : ""}>L</button>
+                        <button type="button" title="Mark Absent" data-attendance-status="Absent" data-id="${participant.id}" data-registration-id="${registration.id}" data-session-id="${session.id}" ${locked ? "disabled" : ""}>A</button>
                       </div>` : ""}
                     </div>
                   </td>`;

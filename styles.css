@@ -1182,8 +1182,8 @@ textarea { resize: vertical; }
 }
 
 .attendance-actions {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(3, 30px);
   gap: 4px;
 }
 
@@ -1195,7 +1195,7 @@ textarea { resize: vertical; }
   color: var(--ink);
   font-size: 12px;
   font-weight: 850;
-  padding: 0 7px;
+  padding: 0;
 }
 
 .attendance-actions button:hover:not(:disabled) {
