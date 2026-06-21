@@ -137,6 +137,7 @@ create table if not exists public.registrations (
   batch_id text references public.batches(id) on delete restrict,
   status text not null default 'Pending',
   eligible boolean not null default false,
+  accommodation_type text not null default 'Not Required',
   room_id text references public.rooms(id) on delete set null,
   checked_in boolean not null default false,
   attendance integer not null default 0,

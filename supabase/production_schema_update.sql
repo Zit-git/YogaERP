@@ -7,6 +7,9 @@ alter table public.teachers
   add column if not exists gender text,
   add column if not exists marital_status text;
 
+alter table public.registrations
+  add column if not exists accommodation_type text not null default 'Not Required';
+
 alter table public.course_masters
   add column if not exists teacher_ids jsonb not null default '[]'::jsonb;
 

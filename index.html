@@ -311,6 +311,7 @@
             <button class="is-selected" data-accommodation-tab="blocks" type="button">Blocks</button>
             <button data-accommodation-tab="floors" type="button">Floors</button>
             <button data-accommodation-tab="rooms" type="button">Rooms</button>
+            <button data-accommodation-tab="allotment" type="button">Allotment</button>
           </div>
           <button class="primary-button" id="addAccommodationRecord" type="button">Add Block</button>
         </div>
@@ -435,6 +436,14 @@
           </label>
           <label>Phone<input name="phone" required></label>
           <label>Email ID<input name="email" type="email" required></label>
+          <label>Accommodation Type
+            <select name="accommodationType">
+              <option>Not Required</option>
+              <option>Single Occupancy</option>
+              <option>Double Occupancy</option>
+              <option>Dormitory</option>
+            </select>
+          </label>
           <label>Photo URL<input name="photo" type="url" placeholder="Optional profile photo link"></label>
           <label>Emergency Contact<input name="emergencyContact" placeholder="Name and phone"></label>
           <label class="wide">Address<textarea name="address" rows="2" placeholder="City, state, country"></textarea></label>
@@ -711,6 +720,6 @@
     <div id="toast" role="status" aria-live="polite"></div>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="supabase-config.js?v=35"></script>
-    <script src="app.js?v=102"></script>
+    <script src="app.js?v=103"></script>
   </body>
 </html>

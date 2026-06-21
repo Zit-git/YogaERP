@@ -23,6 +23,7 @@ let supportsCourseTeacherIds = true;
 let supportsBatchStatus = true;
 let supportsNormalizedSessions = true;
 let supportsTeacherProfileFields = true;
+let supportsRegistrationAccommodationType = true;
 let currentFilter = "all";
 let portalProgramFilter = "";
 let portalProgramSort = "startAsc";
@@ -42,6 +43,7 @@ const tableState = {};
 const bulkSelections = {};
 const tablePageSize = 8;
 const roomTypes = ["Single Occupancy", "Double Occupancy", "Dormitory"];
+const accommodationTypes = ["Not Required", ...roomTypes];
 
 const views = [
   ["portal", "Portal"],
@@ -249,6 +251,12 @@ async function detectTeacherProfileFieldsSupport() {
   supportsTeacherProfileFields = !error;
 }
 
+async function detectRegistrationAccommodationTypeSupport() {
+  if (!supabaseClient) return;
+  const { error } = await supabaseClient.from("registrations").select("accommodation_type").limit(1);
+  supportsRegistrationAccommodationType = !error;
+}
+
 function groupRowsBy(rows, key) {
   return (rows || []).reduce((groups, row) => {
     const value = row[key];
@@ -300,6 +308,7 @@ async function loadRelationalData() {
   await detectBatchStatusSupport();
   await detectNormalizedSessionsSupport();
   await detectTeacherProfileFieldsSupport();
+  await detectRegistrationAccommodationTypeSupport();
   const [
     courseMasters,
     teachers,
@@ -441,6 +450,7 @@ async function loadRelationalData() {
       courseId: registration.batch_id || "",
       status: registration.status || "Pending",
       eligible: Boolean(registration.eligible),
+      accommodationType: normalizeAccommodationType(registration.accommodation_type),
       roomId: registration.room_id || "",
       checkedIn: Boolean(registration.checked_in),
       attendance: Number(registration.attendance) || 0,
@@ -541,6 +551,9 @@ async function syncRelationalTables() {
   if (!supportsTeacherProfileFields && state.teachers.some((teacher) => teacher.title || teacher.firstName || teacher.lastName || teacher.contactNumber || teacher.education || teacher.gender || teacher.maritalStatus)) {
     remoteStatus = "Supabase synced - run supabase/production_schema_update.sql";
   }
+  if (!supportsRegistrationAccommodationType && allRegistrationRows().some(({ registration }) => normalizeAccommodationType(registration.accommodationType) !== "Not Required")) {
+    remoteStatus = "Supabase synced - run supabase/production_schema_update.sql";
+  }
   const teacherRows = state.teachers.map((teacher) => ({
     id: teacher.id,
     name: teacher.name,
@@ -630,7 +643,8 @@ async function syncRelationalTables() {
     program_history: participant.programHistory || [],
     updated_at: now
   }));
-  const registrationRows = allRegistrationRows().map(({ participant, registration }) => ({
+  const registrationPairs = allRegistrationRows();
+  const registrationRows = registrationPairs.map(({ participant, registration }) => ({
     id: registration.id,
     participant_id: participant.id,
     batch_id: registration.courseId || null,
@@ -645,7 +659,11 @@ async function syncRelationalTables() {
     notes: registration.notes || "",
     registered_on: registration.registeredOn || new Date().toISOString().slice(0, 10),
     updated_at: now
-  }));
+  })).map((row, index) => {
+    if (!supportsRegistrationAccommodationType) return row;
+    const registration = registrationPairs[index].registration;
+    return { ...row, accommodation_type: normalizeAccommodationType(registration.accommodationType) };
+  });
   const hallBookingRows = state.hallBookings.map((booking) => ({
     id: booking.id,
     batch_id: booking.courseId || null,
@@ -787,6 +805,7 @@ function migrateState() {
         courseId: participant.courseId,
         status: participant.status,
         eligible: participant.eligible,
+        accommodationType: normalizeAccommodationType(participant.accommodationType),
         roomId: participant.roomId,
         checkedIn: participant.checkedIn,
         attendance: participant.attendance,
@@ -868,6 +887,10 @@ function normalizeRoomType(value) {
   return roomTypes.includes(value) ? value : "Dormitory";
 }
 
+function normalizeAccommodationType(value) {
+  return accommodationTypes.includes(value) ? value : "Not Required";
+}
+
 function roomTypeOptions(selected = "") {
   const normalized = normalizeRoomType(selected);
   return roomTypes.map((type) => ({ value: type, label: type, selected: type === normalized }));
@@ -875,6 +898,16 @@ function roomTypeOptions(selected = "") {
 
 function roomForParticipant(participant) {
   return state.rooms.find((room) => room.id === currentRegistration(participant)?.roomId) || null;
+}
+
+function roomOccupancyForProgram(roomId, courseId) {
+  return allRegistrationRows().filter(({ registration }) => registration.courseId === courseId && registration.roomId === roomId && registration.status === "Confirmed").length;
+}
+
+function roomsForAccommodationType(type) {
+  const normalized = normalizeAccommodationType(type);
+  if (normalized === "Not Required") return [];
+  return state.rooms.filter((room) => normalizeRoomType(room.gender) === normalized);
 }
 
 function registrationsForParticipant(participant) {
@@ -885,6 +918,7 @@ function registrationsForParticipant(participant) {
       courseId: participant.courseId,
       status: participant.status,
       eligible: participant.eligible,
+      accommodationType: normalizeAccommodationType(participant.accommodationType),
       roomId: participant.roomId,
       checkedIn: participant.checkedIn,
       attendance: participant.attendance,
@@ -904,6 +938,7 @@ function syncParticipantFromRegistration(participant, registration) {
   participant.courseId = registration.courseId;
   participant.status = registration.status;
   participant.eligible = registration.eligible;
+  participant.accommodationType = normalizeAccommodationType(registration.accommodationType);
   participant.roomId = registration.roomId;
   participant.checkedIn = registration.checkedIn;
   participant.attendance = registration.attendance;
@@ -1137,12 +1172,13 @@ function currentParticipant() {
   return state.participants.find((participant) => participant.id === currentSession.id) || null;
 }
 
-function registrationPayloadForCourse(courseId, notes = "") {
+function registrationPayloadForCourse(courseId, notes = "", accommodationType = "Not Required") {
   return {
     id: newId("registration"),
     courseId,
     status: "Pending",
     eligible: false,
+    accommodationType: normalizeAccommodationType(accommodationType),
     roomId: "",
     checkedIn: false,
     attendance: 0,
@@ -1156,7 +1192,7 @@ function registrationPayloadForCourse(courseId, notes = "") {
 
 function registerParticipantForCourse(details, courseId) {
   const phone = details.phone.trim();
-  const registration = registrationPayloadForCourse(courseId, details.notes || "");
+  const registration = registrationPayloadForCourse(courseId, details.notes || "", details.accommodationType || "Not Required");
   let participant = state.participants.find((item) => item.phone === phone || item.id === phone);
   if (participant) {
     participant.name = details.name.trim() || participant.name;
@@ -1433,6 +1469,7 @@ function bulkFieldDefinitions(key) {
     registrations: [
       { name: "status", label: "Status", type: "select", options: ["Pending", "Confirmed", "Waitlist"].map((value) => ({ value, label: value })) },
       { name: "eligible", label: "Eligibility", type: "select", options: yesNo },
+      { name: "accommodationType", label: "Accommodation Type", type: "select", options: accommodationTypes.map((type) => ({ value: type, label: type })) },
       { name: "roomId", label: "Room", type: "select", options: [{ value: "", label: "Not assigned" }, ...state.rooms.map((room) => ({ value: room.id, label: room.name }))] }
     ],
     "accommodation-blocks": [
@@ -1527,6 +1564,11 @@ function addBulkRegistrantRow(values = {}) {
         </label>
         <label>Phone<input data-bulk-field="phone" value="${values.phone || ""}" required></label>
         <label>Email ID<input data-bulk-field="email" type="email" value="${values.email || ""}" required></label>
+        <label>Accommodation Type
+          <select data-bulk-field="accommodationType">
+            ${accommodationTypes.map((type) => `<option ${type === (values.accommodationType || "Not Required") ? "selected" : ""}>${type}</option>`).join("")}
+          </select>
+        </label>
         <label>Emergency Contact<input data-bulk-field="emergencyContact" value="${values.emergencyContact || ""}"></label>
         <label class="wide">Address<textarea data-bulk-field="address" rows="2">${values.address || ""}</textarea></label>
         <label class="wide">Health Notes<textarea data-bulk-field="notes" rows="2">${values.notes || ""}</textarea></label>
@@ -1544,6 +1586,7 @@ function bulkRegistrantDetails() {
       gender: valueFor("gender"),
       phone: valueFor("phone"),
       email: valueFor("email"),
+      accommodationType: valueFor("accommodationType") || "Not Required",
       photo: "",
       emergencyContact: valueFor("emergencyContact"),
       address: valueFor("address"),
@@ -1593,6 +1636,7 @@ async function applyBulkEdit(form) {
       state.participants.forEach((participant) => registrationsForParticipant(participant).forEach((registration) => {
         if (registration.id !== id) return;
         if (field === "eligible") registration.eligible = boolValue;
+        else if (field === "accommodationType") registration.accommodationType = normalizeAccommodationType(value);
         else registration[field] = value;
         if (registration === currentRegistration(participant)) syncParticipantFromRegistration(participant, registration);
       }));
@@ -2574,6 +2618,7 @@ function renderParticipantsMaster() {
       <div class="detail-item"><span>Course Completion</span><strong>${registration.completion}</strong></div>
       <div class="detail-item"><span>Attendance</span><strong>${registration.attendance} sessions</strong></div>
       <div class="detail-item"><span>Certificate</span><strong>${registration.certificate ? "Issued" : "Pending"}</strong></div>
+      <div class="detail-item"><span>Accommodation Type</span><strong>${normalizeAccommodationType(registration.accommodationType)}</strong></div>
       <div class="detail-item"><span>Accommodation Details</span><strong>${room?.name || "Not assigned"}</strong></div>
       <div class="detail-item"><span>Room Type</span><strong>${room ? `${room.gender} | ${roomOccupants}/${room.beds} beds used` : "Not assigned"}</strong></div>
       <div class="detail-item"><span>Check-In</span><strong>${registration.checkedIn ? "Checked in" : "Not checked in"}</strong></div>
@@ -2623,7 +2668,7 @@ function renderRegistrations() {
     { key: "program", label: "Program", value: ({ registration }) => courseName(registration.courseId) },
     { key: "status", label: "Status", value: ({ registration }) => registration.status },
     { key: "eligible", label: "Eligibility", value: ({ registration }) => registration.eligible ? "Verified" : "Needs review" },
-    { key: "room", label: "Room", value: ({ registration }) => roomName(registration.roomId) },
+    { key: "room", label: "Accommodation", value: ({ registration }) => `${normalizeAccommodationType(registration.accommodationType)} ${roomName(registration.roomId)}` },
     { key: "actions", label: "Actions", value: () => "", sort: false, filter: false }
   ];
   ensureTableChrome("participantRows", "registrations", columns);
@@ -2632,7 +2677,7 @@ function renderRegistrations() {
     program: (a, b) => courseName(a.registration.courseId).localeCompare(courseName(b.registration.courseId)),
     status: (a, b) => a.registration.status.localeCompare(b.registration.status),
     eligible: (a, b) => Number(a.registration.eligible) - Number(b.registration.eligible),
-    room: (a, b) => roomName(a.registration.roomId).localeCompare(roomName(b.registration.roomId))
+    room: (a, b) => `${normalizeAccommodationType(a.registration.accommodationType)} ${roomName(a.registration.roomId)}`.localeCompare(`${normalizeAccommodationType(b.registration.accommodationType)} ${roomName(b.registration.roomId)}`)
   });
   const showActions = canReviewRegistrations();
   $("#participantRows").innerHTML = result.rows.map(({ participant, registration }) => {
@@ -2644,7 +2689,7 @@ function renderRegistrations() {
         <td><button class="text-link-button" type="button" data-linked-batch="${registration.courseId}">${courseName(registration.courseId)}</button><br><span class="muted">${registration.registeredOn || "Registration date not set"}</span></td>
         <td><span class="pill ${statusClass(registration.status)}">${registration.status}</span></td>
         <td>${registration.eligible ? "Verified" : "Needs review"}</td>
-        <td>${roomName(registration.roomId)}</td>
+        <td>${normalizeAccommodationType(registration.accommodationType)}<br><span class="muted">${roomName(registration.roomId)}</span></td>
         <td>
           ${!showActions || registration.status === "Confirmed" ? "<span class=\"muted\">No further actions</span>" : `
             <div class="row-actions">
@@ -2731,6 +2776,31 @@ function renderRooms() {
       <td><div class="row-actions"><button class="secondary-button" type="button" data-room-edit="${room.id}">Edit</button><button class="danger-button" type="button" data-room-delete="${room.id}">Delete</button></div></td>
     </tr>`;
   }).join("");
+  const allotmentRows = allRegistrationRows()
+    .filter(({ registration }) => registration.status === "Confirmed" && normalizeAccommodationType(registration.accommodationType) !== "Not Required")
+    .sort((a, b) => courseName(a.registration.courseId).localeCompare(courseName(b.registration.courseId)) || a.participant.name.localeCompare(b.participant.name))
+    .map(({ participant, registration }) => {
+      const course = state.courses.find((item) => item.id === registration.courseId);
+      const matchingRooms = roomsForAccommodationType(registration.accommodationType);
+      const assignedRoom = state.rooms.find((room) => room.id === registration.roomId);
+      const availableBeds = matchingRooms.reduce((sum, room) => sum + Math.max(0, Number(room.beds) - roomOccupancyForProgram(room.id, registration.courseId)), 0);
+      const roomOptions = [
+        `<option value="">Not allotted</option>`,
+        ...matchingRooms.map((room) => {
+          const occupied = roomOccupancyForProgram(room.id, registration.courseId);
+          const isSelected = room.id === registration.roomId;
+          const full = occupied >= Number(room.beds) && !isSelected;
+          return `<option value="${room.id}" ${isSelected ? "selected" : ""} ${full ? "disabled" : ""}>${room.name} - ${blockName(room.blockId)} / ${floorName(room.floorId)} (${occupied}/${room.beds})</option>`;
+        })
+      ].join("");
+      return `<tr>
+        <td><strong>${participant.name}</strong><br><span class="muted">${participant.phone}</span></td>
+        <td>${course ? `<button class="text-link-button" type="button" data-linked-batch="${course.id}">${course.name}</button>` : "Program not found"}<br><span class="muted">${course ? `${course.start} to ${course.end}` : "No date range"}</span></td>
+        <td>${normalizeAccommodationType(registration.accommodationType)}<br><span class="muted">${availableBeds} matching bed(s) available</span></td>
+        <td>${assignedRoom ? `${assignedRoom.name}<br><span class="muted">${blockName(assignedRoom.blockId)} / ${floorName(assignedRoom.floorId)}</span>` : "<span class=\"muted\">Not allotted</span>"}</td>
+        <td><select data-room-allotment="${participant.id}" data-registration-id="${registration.id}">${roomOptions}</select></td>
+      </tr>`;
+    }).join("");
   const contentByTab = {
     blocks: `
       <div class="table-wrap">
@@ -2755,6 +2825,14 @@ function renderRooms() {
           <tbody id="accommodationRoomRows">${roomRows}</tbody>
         </table>
       </div>
+    `,
+    allotment: `
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Participant</th><th>Program Dates</th><th>Requested Type</th><th>Current Room</th><th>Allot Room</th></tr></thead>
+          <tbody>${allotmentRows || `<tr><td colspan="5"><span class="muted">No confirmed registrations need room allotment.</span></td></tr>`}</tbody>
+        </table>
+      </div>
     `
   };
   $("#accommodationContent").innerHTML = contentByTab[accommodationTab] || contentByTab.blocks;
@@ -2767,11 +2845,13 @@ function renderRooms() {
   $$("#accommodationTabs button").forEach((button) => button.classList.toggle("is-selected", button.dataset.accommodationTab === accommodationTab));
   const addButton = $("#addAccommodationRecord");
   if (addButton) {
+    addButton.hidden = false;
     addButton.textContent = {
       blocks: "Add Block",
       floors: "Add Floor",
       rooms: "Add Room"
     }[accommodationTab] || "Add Record";
+    addButton.hidden = accommodationTab === "allotment";
   }
 }
 
@@ -3198,6 +3278,29 @@ function markSessionPresentForAll(courseId, sessionId) {
   });
   renderAll();
   showToast(skipped ? `Marked ${marked} present. ${skipped} exception(s) unchanged.` : `Marked ${marked} present.`);
+}
+
+function allotRoomToRegistration(participantId, registrationId, roomId) {
+  if (!canManageMasters()) return;
+  const participant = state.participants.find((item) => item.id === participantId);
+  if (!participant) return;
+  const registration = registrationsForParticipant(participant).find((item) => item.id === registrationId);
+  if (!registration) return;
+  const room = state.rooms.find((item) => item.id === roomId);
+  if (room && normalizeRoomType(room.gender) !== normalizeAccommodationType(registration.accommodationType)) {
+    showToast("Selected room does not match the requested accommodation type.");
+    renderRooms();
+    return;
+  }
+  if (room && roomOccupancyForProgram(room.id, registration.courseId) >= Number(room.beds) && registration.roomId !== room.id) {
+    showToast("Selected room has no available beds for this program.");
+    renderRooms();
+    return;
+  }
+  registration.roomId = roomId || "";
+  if (registration === currentRegistration(participant)) syncParticipantFromRegistration(participant, registration);
+  renderAll();
+  showToast(room ? `Room allotted: ${room.name}` : "Room allotment cleared.");
 }
 
 function openAttendanceReasonDialog(participantId, registrationId, sessionId, status) {
@@ -3902,6 +4005,11 @@ function bindEvents() {
   $("#programTeacherOptions").addEventListener("change", (event) => {
     if (event.target.closest("[data-program-teacher-option]")) syncProgramTeacherSelection();
   });
+  $("#accommodationContent").addEventListener("change", (event) => {
+    const allotment = event.target.closest("[data-room-allotment]");
+    if (!allotment) return;
+    allotRoomToRegistration(allotment.dataset.roomAllotment, allotment.dataset.registrationId, allotment.value);
+  });
   document.body.addEventListener("input", (event) => {
     const filter = event.target.closest("[data-column-filter]");
     if (!filter) return;
@@ -4390,6 +4498,7 @@ function bindEvents() {
       gender: form.get("gender"),
       phone: form.get("phone"),
       email: form.get("email"),
+      accommodationType: form.get("accommodationType"),
       photo: form.get("photo"),
       emergencyContact: form.get("emergencyContact"),
       address: form.get("address"),
