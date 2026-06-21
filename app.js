@@ -10,7 +10,6 @@ const emptyState = () => ({
   participants: []
 });
 
-const appSessionStorageKey = "aliyar.currentSession.v1";
 const state = emptyState();
 let currentSession = loadCachedSession();
 const supabaseClient = createSupabaseClient();
@@ -674,37 +673,11 @@ function publicSession() {
 }
 
 function loadCachedSession() {
-  try {
-    const cached = window.localStorage?.getItem(appSessionStorageKey);
-    if (!cached) return publicSession();
-    const session = JSON.parse(cached);
-    if (!session?.role || session.role === "public" || !session.permissions) return publicSession();
-    return {
-      role: session.role,
-      id: session.id || "",
-      userId: session.userId || "",
-      name: session.name || "User",
-      permissions: {
-        canManageMasters: Boolean(session.permissions.canManageMasters),
-        canReviewRegistrations: Boolean(session.permissions.canReviewRegistrations),
-        canMarkAttendance: Boolean(session.permissions.canMarkAttendance)
-      }
-    };
-  } catch {
-    return publicSession();
-  }
+  return publicSession();
 }
 
 function cacheCurrentSession() {
-  try {
-    if (currentSession.role === "public") {
-      window.localStorage?.removeItem(appSessionStorageKey);
-      return;
-    }
-    window.localStorage?.setItem(appSessionStorageKey, JSON.stringify(currentSession));
-  } catch {
-    // Session caching is a convenience only; Supabase Auth remains authoritative.
-  }
+  // Supabase Auth remains authoritative; app records are never cached in browser storage.
 }
 
 function migrateState() {
