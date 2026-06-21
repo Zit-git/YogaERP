@@ -938,6 +938,11 @@ function assignableTeachers() {
         return;
       }
       const virtualId = user.linked_teacher_id || user.user_id;
+      const existingTeacher = teacherById(virtualId);
+      if (existingTeacher) {
+        teachers.set(existingTeacher.id, existingTeacher);
+        return;
+      }
       const splitName = splitTeacherName(user.display_name || user.login_email || "Teacher");
       teachers.set(virtualId, {
         id: virtualId,
