@@ -2227,6 +2227,11 @@ function conductedProgramsForCourse(program) {
   return state.courses.filter((course) => hierarchyIds.has(course.programId) || (!course.programId && hierarchyNames.has(course.name)));
 }
 
+function coursesMappedToTeacher(teacher) {
+  if (!teacher) return [];
+  return state.programs.filter((program) => (program.teacherIds || []).includes(teacher.id));
+}
+
 function renderProgramHierarchyContext(program) {
   const ancestors = programAncestors(program);
   const children = programChildren(program.id);
@@ -2390,6 +2395,7 @@ function renderTeachers() {
     return;
   }
   const selectedDisplayName = teacherDisplayName(selected);
+  const mappedCourses = coursesMappedToTeacher(selected);
   const conducted = state.courses.filter((course) => course.teacher === selectedDisplayName || course.teacher === selected.name);
   $("#teacherDetail").innerHTML = `
     ${backLinkHtml()}
@@ -2420,6 +2426,34 @@ function renderTeachers() {
       <div class="detail-item detail-item-wide"><span>Educational Qualifications</span><strong>${selected.education || "Not captured"}</strong></div>
       <div class="detail-item detail-item-wide"><span>Notes</span><strong>${selected.notes || "No notes recorded."}</strong></div>
     </div>
+    <section class="participant-subform">
+      <div class="subform-header">
+        <h3>Courses Mapped</h3>
+        <span class="muted">${mappedCourses.length} course(s)</span>
+      </div>
+      <div class="table-wrap subform-table">
+        <table>
+          <thead>
+            <tr>
+              <th>Course</th>
+              <th>Hierarchy</th>
+              <th>Duration</th>
+              <th>Programs</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${mappedCourses.length ? mappedCourses.map((program) => `
+              <tr>
+                <td><button class="text-link-button" type="button" data-linked-program="${program.id}">${program.name}</button><br><span class="muted">${program.code || "No code"} | ${program.level || "No level"}</span></td>
+                <td>${courseMasterLabel(program)}</td>
+                <td>${program.duration || "Not set"}</td>
+                <td>${conductedProgramsForCourse(program).length}</td>
+              </tr>
+            `).join("") : `<tr><td colspan="4"><span class="muted">No courses mapped to this teacher yet.</span></td></tr>`}
+          </tbody>
+        </table>
+      </div>
+    </section>
     <section class="participant-subform">
       <div class="subform-header">
         <h3>Programs Conducted</h3>
@@ -4012,6 +4046,11 @@ function bindEvents() {
     if (editCourse) {
       if (!canManageMasters()) return;
       openCourseDialog(editCourse.dataset.courseEdit);
+      return;
+    }
+    const linkedProgram = event.target.closest("[data-linked-program]");
+    if (linkedProgram) {
+      openLinkedRecord("programs", { programId: linkedProgram.dataset.linkedProgram }, "Back to Teacher");
       return;
     }
     const deleteCourseButton = event.target.closest("[data-course-delete]");
