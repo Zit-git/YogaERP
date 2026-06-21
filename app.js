@@ -596,15 +596,18 @@ async function syncRelationalTables() {
   }));
   const batchRows = state.courses.map((course) => {
     const teacher = teacherByName(course.teacher);
+    const persistedTeacher = teacher && !teacher.isVirtual && state.teachers.some((item) => item.id === teacher.id) ? teacher : null;
+    const persistedProgramId = state.programs.some((program) => program.id === course.programId) ? course.programId : null;
+    const persistedHallId = state.halls.some((hall) => hall.id === course.hallId) ? course.hallId : null;
     const row = {
       id: course.id,
-      program_id: course.programId || null,
+      program_id: persistedProgramId,
       name: course.name,
       start_date: course.start,
       end_date: course.end,
       seats: Number(course.seats) || 1,
-      hall_id: course.hallId || null,
-      teacher_id: teacher?.id || null,
+      hall_id: persistedHallId,
+      teacher_id: persistedTeacher?.id || null,
       teacher_name: course.teacher || "",
       eligibility: course.eligibility || "",
       sessions: course.sessions || [],
