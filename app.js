@@ -1814,7 +1814,6 @@ function renderPermissionChrome() {
     "#addProgram",
     "#addCourse",
     "#addAccommodationRecord",
-    "#autoAssign",
     "#addHall",
     "#addHallBooking",
     "#addAccessUser",
@@ -3662,7 +3661,6 @@ function bindEvents() {
     calendarDate = new Date(calendarDate.getFullYear(), calendarDate.getMonth() + 1, 1);
     renderCalendar();
   });
-  $("#autoAssign").addEventListener("click", () => canManageMasters() && assignRooms());
   $("#addAccommodationRecord").addEventListener("click", () => {
     if (!canManageMasters()) return;
     if (accommodationTab === "blocks") {
