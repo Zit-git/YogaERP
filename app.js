@@ -2487,25 +2487,28 @@ function renderRegistrations() {
     room: (a, b) => roomName(a.registration.roomId).localeCompare(roomName(b.registration.roomId))
   });
   const showActions = canReviewRegistrations();
-  $("#participantRows").innerHTML = result.rows.map(({ participant, registration }) => `
-    <tr>
-      ${renderSelectionCell("registrations", registration.id)}
-      <td><strong><button class="text-link-button" type="button" data-linked-participant="${participant.id}">${participant.name}</button></strong><br><span class="muted">${participant.id} | ${participant.phone}</span></td>
-      <td><button class="text-link-button" type="button" data-linked-batch="${registration.courseId}">${courseName(registration.courseId)}</button><br><span class="muted">${registration.registeredOn || "Registration date not set"}</span></td>
-      <td><span class="pill ${statusClass(registration.status)}">${registration.status}</span></td>
-      <td>${registration.eligible ? "Verified" : "Needs review"}</td>
-      <td>${roomName(registration.roomId)}</td>
-      <td>
-        ${!showActions || registration.status === "Confirmed" ? "<span class=\"muted\">No further actions</span>" : `
-          <div class="row-actions">
-            <button class="secondary-button" type="button" data-action="eligible" data-id="${participant.id}" data-registration-id="${registration.id}">Verify</button>
-            <button class="secondary-button" type="button" data-action="confirm" data-id="${participant.id}" data-registration-id="${registration.id}">Confirm</button>
-            <button class="secondary-button" type="button" data-action="waitlist" data-id="${participant.id}" data-registration-id="${registration.id}">Waitlist</button>
-          </div>
-        `}
-      </td>
-    </tr>
-  `).join("") || `<tr><td colspan="${canManageMasters() ? 7 : 6}"><span class="muted">No registrations found.</span></td></tr>`;
+  $("#participantRows").innerHTML = result.rows.map(({ participant, registration }) => {
+    const contactLine = [participant.phone, participant.email].filter(Boolean).join(" | ") || "Contact not captured";
+    return `
+      <tr>
+        ${renderSelectionCell("registrations", registration.id)}
+        <td><strong><button class="text-link-button" type="button" data-linked-participant="${participant.id}">${participant.name}</button></strong><br><span class="muted">${contactLine}</span></td>
+        <td><button class="text-link-button" type="button" data-linked-batch="${registration.courseId}">${courseName(registration.courseId)}</button><br><span class="muted">${registration.registeredOn || "Registration date not set"}</span></td>
+        <td><span class="pill ${statusClass(registration.status)}">${registration.status}</span></td>
+        <td>${registration.eligible ? "Verified" : "Needs review"}</td>
+        <td>${roomName(registration.roomId)}</td>
+        <td>
+          ${!showActions || registration.status === "Confirmed" ? "<span class=\"muted\">No further actions</span>" : `
+            <div class="row-actions">
+              <button class="secondary-button" type="button" data-action="eligible" data-id="${participant.id}" data-registration-id="${registration.id}">Verify</button>
+              <button class="secondary-button" type="button" data-action="confirm" data-id="${participant.id}" data-registration-id="${registration.id}">Confirm</button>
+              <button class="secondary-button" type="button" data-action="waitlist" data-id="${participant.id}" data-registration-id="${registration.id}">Waitlist</button>
+            </div>
+          `}
+        </td>
+      </tr>
+    `;
+  }).join("") || `<tr><td colspan="${canManageMasters() ? 7 : 6}"><span class="muted">No registrations found.</span></td></tr>`;
   renderTablePagination("registrations", result);
 }
 
