@@ -196,6 +196,7 @@ async function applyAuthUserSession(user, { showError = false } = {}) {
     role: role.id,
     id: linkedId || user.id,
     userId: user.id,
+    email: user.email || "",
     name: roleRecord.display_name || user.email || role.name || "User",
     permissions: {
       canManageMasters: Boolean(role.can_manage_masters),
@@ -669,6 +670,7 @@ function publicSession() {
     role: "public",
     id: "",
     userId: "",
+    email: "",
     name: "Public Visitor",
     permissions: {
       canManageMasters: false,
@@ -894,6 +896,10 @@ function assignableTeachers() {
         id: virtualId,
         name: user.display_name || user.login_email || "Teacher",
         speciality: roleById(user.role_id)?.name || "Faculty",
+        phone: "",
+        email: user.login_email || "",
+        photo: "",
+        notes: "Teacher login user",
         isVirtual: true
       });
     });
@@ -2274,8 +2280,8 @@ function renderProgramDetail() {
 
 function renderTeachers() {
   const teachers = currentSession.role === "teacher"
-    ? state.teachers.filter((teacher) => teacher.id === currentSession.id)
-    : state.teachers;
+    ? assignableTeachers().filter((teacher) => teacher.id === currentSession.id || teacher.email === currentSession.email)
+    : assignableTeachers();
   if (!selectedTeacherId || !teachers.some((teacher) => teacher.id === selectedTeacherId)) {
     selectedTeacherId = teachers[0]?.id || "";
   }
