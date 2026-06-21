@@ -45,7 +45,7 @@ const roomTypes = ["Single Occupancy", "Double Occupancy", "Dormitory"];
 const views = [
   ["portal", "Portal"],
   ["dashboard", "Dashboard"],
-  ["programs", "Course"],
+  ["programs", "Courses"],
   ["courses", "Programs"],
   ["teachers", "Teachers"],
   ["registrations", "Registrations"],
@@ -58,7 +58,7 @@ const views = [
 
 const navViews = [
   ["dashboard", "Dashboard"],
-  ["programs", "Course"],
+  ["programs", "Courses"],
   ["courses", "Programs"],
   ["registrations", "Registrations"],
   ["participants", "Participants"],
