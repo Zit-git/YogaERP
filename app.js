@@ -447,8 +447,17 @@ function scheduleRemoteSave() {
   remoteSaveTimer = setTimeout(persistRemoteData, 550);
 }
 
+function hasCoreRemoteData() {
+  return state.programs.length > 0 || state.courses.length > 0 || state.participants.length > 0 || state.halls.length > 0 || state.blocks.length > 0 || state.rooms.length > 0;
+}
+
 async function persistRemoteData() {
   if (!supabaseClient || !hasLoadedRemoteData) return;
+  if (!hasCoreRemoteData()) {
+    remoteStatus = "Supabase sync skipped - no loaded records";
+    renderAuthState();
+    return;
+  }
   try {
     await syncRelationalTables();
     if (!remoteStatus.includes("course_teacher_associations") && !remoteStatus.includes("batches_status") && !remoteStatus.includes("normalized_sessions")) remoteStatus = "Supabase synced";
@@ -460,13 +469,11 @@ async function persistRemoteData() {
   }
 }
 
-async function replaceSupabaseTable(tableName, rows) {
+async function upsertSupabaseRows(tableName, rows) {
   if (!supabaseClient) return;
-  const deleteResult = await supabaseClient.from(tableName).delete().neq("id", "__none__");
-  if (deleteResult.error) throw deleteResult.error;
   if (!rows.length) return;
-  const insertResult = await supabaseClient.from(tableName).insert(rows);
-  if (insertResult.error) throw insertResult.error;
+  const upsertResult = await supabaseClient.from(tableName).upsert(rows);
+  if (upsertResult.error) throw upsertResult.error;
 }
 
 async function syncRelationalTables() {
@@ -628,35 +635,19 @@ async function syncRelationalTables() {
     updated_at: now
   })));
 
-  await replaceSupabaseTable("hall_bookings", []);
-  if (supportsNormalizedSessions) {
-    await replaceSupabaseTable("session_attendance", []);
-    await replaceSupabaseTable("batch_sessions", []);
-    await replaceSupabaseTable("course_session_templates", []);
-  }
-  await replaceSupabaseTable("registrations", []);
-  await replaceSupabaseTable("batches", []);
-  await replaceSupabaseTable("rooms", []);
-  await replaceSupabaseTable("accommodation_floors", []);
-  await replaceSupabaseTable("accommodation_blocks", []);
-  await replaceSupabaseTable("participants", []);
-  await replaceSupabaseTable("program_halls", []);
-  await replaceSupabaseTable("teachers", []);
-  await replaceSupabaseTable("course_masters", []);
-
-  await replaceSupabaseTable("course_masters", courseMasterRows);
-  if (supportsNormalizedSessions) await replaceSupabaseTable("course_session_templates", courseSessionTemplateRows);
-  await replaceSupabaseTable("teachers", teacherRows);
-  await replaceSupabaseTable("program_halls", hallRows);
-  await replaceSupabaseTable("accommodation_blocks", blockRows);
-  await replaceSupabaseTable("accommodation_floors", floorRows);
-  await replaceSupabaseTable("rooms", roomRows);
-  await replaceSupabaseTable("batches", batchRows);
-  if (supportsNormalizedSessions) await replaceSupabaseTable("batch_sessions", batchSessionRows);
-  await replaceSupabaseTable("participants", participantRows);
-  await replaceSupabaseTable("registrations", registrationRows);
-  if (supportsNormalizedSessions) await replaceSupabaseTable("session_attendance", sessionAttendanceRows);
-  await replaceSupabaseTable("hall_bookings", hallBookingRows);
+  await upsertSupabaseRows("course_masters", courseMasterRows);
+  if (supportsNormalizedSessions) await upsertSupabaseRows("course_session_templates", courseSessionTemplateRows);
+  await upsertSupabaseRows("teachers", teacherRows);
+  await upsertSupabaseRows("program_halls", hallRows);
+  await upsertSupabaseRows("accommodation_blocks", blockRows);
+  await upsertSupabaseRows("accommodation_floors", floorRows);
+  await upsertSupabaseRows("rooms", roomRows);
+  await upsertSupabaseRows("batches", batchRows);
+  if (supportsNormalizedSessions) await upsertSupabaseRows("batch_sessions", batchSessionRows);
+  await upsertSupabaseRows("participants", participantRows);
+  await upsertSupabaseRows("registrations", registrationRows);
+  if (supportsNormalizedSessions) await upsertSupabaseRows("session_attendance", sessionAttendanceRows);
+  await upsertSupabaseRows("hall_bookings", hallBookingRows);
 }
 
 function publicSession() {
