@@ -481,10 +481,11 @@
         <div class="modal-header">
           <div>
             <p class="eyebrow">Program Management</p>
-            <h2>Add Program Schedule</h2>
+            <h2 id="courseDialogTitle">Add Program Schedule</h2>
           </div>
           <button class="icon-button" id="closeCourse" value="cancel" aria-label="Close" type="button">x</button>
         </div>
+        <input type="hidden" name="id">
         <div class="form-grid">
           <label class="wide">Program Name<input name="name" placeholder="Foundation Yoga - June Program" required></label>
           <label>Course Master<select name="programId" id="batchProgramSelect" required></select></label>
@@ -678,6 +679,6 @@
     <div id="toast" role="status" aria-live="polite"></div>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="supabase-config.js?v=35"></script>
-    <script src="app.js?v=84"></script>
+    <script src="app.js?v=85"></script>
   </body>
 </html>

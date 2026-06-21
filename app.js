@@ -1904,7 +1904,12 @@ function renderCourses() {
         <td>${teacherByName(course.teacher) ? `<button class="text-link-button" type="button" data-linked-teacher="${teacherByName(course.teacher).id}">${course.teacher}</button>` : course.teacher}</td>
         <td>${registered}/${course.seats}</td>
         <td>${course.hall}</td>
-        <td>${status !== "Completed" && currentSession.role !== "participant" ? `<button class="secondary-button" type="button" data-course-register="${course.id}">Register</button>` : "<span class=\"muted\">Not available</span>"}</td>
+        <td>
+          <div class="row-actions">
+            ${canManageMasters() ? `<button class="secondary-button" type="button" data-course-edit="${course.id}">Edit</button><button class="danger-button" type="button" data-course-delete="${course.id}">Delete</button>` : ""}
+            ${status !== "Completed" && currentSession.role !== "participant" ? `<button class="secondary-button" type="button" data-course-register="${course.id}">Register</button>` : "<span class=\"muted\">Not available</span>"}
+          </div>
+        </td>
       </tr>
     `;
   }).join("") || `<tr><td colspan="${canManageMasters() ? 7 : 6}"><span class="muted">No programs found.</span></td></tr>`;
@@ -1938,6 +1943,7 @@ function renderBatchDetail() {
         <p class="muted">${course.eligibility} | ${status}</p>
       </div>
       <div class="row-actions">
+        ${showBatchActions ? `<button class="secondary-button" type="button" data-course-edit="${course.id}">Edit Program</button><button class="danger-button" type="button" data-course-delete="${course.id}">Delete Program</button>` : ""}
         ${showBatchActions ? `<button class="primary-button" type="button" data-apply-course-sessions="${course.id}">Apply Course Sessions</button>` : ""}
         ${showRegistrationAction ? `<button class="secondary-button" type="button" data-course-register="${course.id}">Register Participant</button>` : ""}
       </div>
@@ -2815,14 +2821,32 @@ function renderCourseOptions() {
   renderProgramTeacherOptions();
 }
 
-function prepareCourseDialog() {
-  $("#courseForm").reset();
+function openCourseDialog(courseId = "") {
+  const form = $("#courseForm");
+  form.reset();
+  form.elements.id.value = courseId;
   renderCourseOptions();
-  const firstCourseWithTeachers = state.programs.find((program) => teachersForProgram(program.id).length);
-  if (firstCourseWithTeachers) {
-    $("#batchProgramSelect").value = firstCourseWithTeachers.id;
+  if (courseId) {
+    const course = state.courses.find((item) => item.id === courseId);
+    if (!course) return;
+    $("#courseDialogTitle").textContent = "Edit Program Schedule";
+    form.elements.name.value = course.name;
+    form.elements.programId.value = course.programId || "";
+    form.elements.start.value = course.start;
+    form.elements.end.value = course.end;
+    form.elements.seats.value = course.seats;
+    form.elements.hallId.value = course.hallId || "";
+    form.elements.eligibility.value = course.eligibility || "";
+    renderBatchTeacherOptions(course.teacher || "");
+  } else {
+    $("#courseDialogTitle").textContent = "Add Program Schedule";
+    const firstCourseWithTeachers = state.programs.find((program) => teachersForProgram(program.id).length);
+    if (firstCourseWithTeachers) {
+      $("#batchProgramSelect").value = firstCourseWithTeachers.id;
+    }
+    renderBatchTeacherOptions();
   }
-  renderBatchTeacherOptions();
+  $("#courseDialog").showModal();
 }
 
 function renderProgramParentOptions(currentId = "") {
@@ -3453,6 +3477,28 @@ async function deleteHallBooking(bookingId) {
   renderAll();
 }
 
+async function deleteCourse(courseId) {
+  const course = state.courses.find((item) => item.id === courseId);
+  if (!course) return;
+  if (allRegistrationRows().some(({ registration }) => registration.courseId === courseId)) {
+    showToast("Cannot delete a program with registrations.");
+    return;
+  }
+  state.courses = state.courses.filter((item) => item.id !== courseId);
+  const bookingIds = state.hallBookings.filter((booking) => booking.courseId === courseId).map((booking) => booking.id);
+  state.hallBookings = state.hallBookings.filter((booking) => booking.courseId !== courseId);
+  if (supportsNormalizedSessions) {
+    await deleteSupabaseWhere("session_attendance", "batch_id", courseId);
+    await deleteSupabaseWhere("batch_sessions", "batch_id", courseId);
+  }
+  await Promise.all(bookingIds.map((bookingId) => deleteSupabaseRow("hall_bookings", bookingId)));
+  await deleteSupabaseRow("batches", courseId);
+  selectedCourseId = state.courses[0]?.id || "";
+  openDetailView.courses = false;
+  renderAll();
+  showToast("Program deleted.");
+}
+
 function openProgramDialog(programId = "") {
   const form = $("#programForm");
   form.reset();
@@ -3499,8 +3545,7 @@ async function deleteProgram(programId) {
 function bindEvents() {
   $("#addCourse").addEventListener("click", () => {
     if (!canManageMasters()) return;
-    prepareCourseDialog();
-    $("#courseDialog").showModal();
+    openCourseDialog();
   });
   $("#addProgram").addEventListener("click", () => canManageMasters() && openProgramDialog());
   $("#addRegistration").addEventListener("click", () => openRegistrationDialog());
@@ -3740,6 +3785,18 @@ function bindEvents() {
       requestAnimationFrame(() => {
         document.querySelector(`[data-batch-view="${openedCourseId}"]`)?.scrollIntoView({ behavior: "smooth", block: "center" });
       });
+      return;
+    }
+    const editCourse = event.target.closest("[data-course-edit]");
+    if (editCourse) {
+      if (!canManageMasters()) return;
+      openCourseDialog(editCourse.dataset.courseEdit);
+      return;
+    }
+    const deleteCourseButton = event.target.closest("[data-course-delete]");
+    if (deleteCourseButton) {
+      if (!canManageMasters()) return;
+      await deleteCourse(deleteCourseButton.dataset.courseDelete);
       return;
     }
     const linkBack = event.target.closest("[data-link-back]");
@@ -4098,7 +4155,10 @@ function bindEvents() {
       showToast("Assign teachers to this Course Master before scheduling a program.");
       return;
     }
-    const courseId = newId("course");
+    const existingCourseId = form.get("id");
+    const existingCourse = state.courses.find((course) => course.id === existingCourseId);
+    const courseId = existingCourse?.id || newId("course");
+    const previousProgramId = existingCourse?.programId || "";
     const courseData = {
       id: courseId,
       programId,
@@ -4112,22 +4172,32 @@ function bindEvents() {
       eligibility: form.get("eligibility").trim() || program?.eligibility || ""
     };
     courseData.status = programLifecycleStatus(courseData);
-    state.courses.push(courseData);
-    courseData.sessions = defaultSessionPlan(courseId);
-    state.hallBookings.push({
-      id: newId("hallBooking"),
-      courseId,
-      hallId,
-      start,
-      end,
-      notes: "Created from program schedule"
-    });
+    if (existingCourse) {
+      const shouldRefreshSessions = previousProgramId !== programId || existingCourse.start !== start || existingCourse.end !== end;
+      Object.assign(existingCourse, courseData);
+      existingCourse.sessions = shouldRefreshSessions ? defaultSessionPlan(courseId) : existingCourse.sessions || defaultSessionPlan(courseId);
+      const booking = state.hallBookings.find((item) => item.courseId === courseId);
+      if (booking) Object.assign(booking, { hallId, start, end });
+      else state.hallBookings.push({ id: newId("hallBooking"), courseId, hallId, start, end, notes: "Created from program schedule" });
+    } else {
+      state.courses.push(courseData);
+      courseData.sessions = defaultSessionPlan(courseId);
+      state.hallBookings.push({
+        id: newId("hallBooking"),
+        courseId,
+        hallId,
+        start,
+        end,
+        notes: "Created from program schedule"
+      });
+    }
     calendarDate = new Date(`${start}T00:00:00`);
+    selectedCourseId = courseId;
     event.currentTarget.reset();
     $("#courseDialog").close();
     activateView("courses");
     renderAll();
-    showToast("Program schedule added.");
+    showToast(existingCourse ? "Program updated." : "Program schedule added.");
   });
   $("#programForm").addEventListener("submit", (event) => {
     if (event.submitter?.value === "cancel") return;
