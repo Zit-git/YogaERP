@@ -1024,7 +1024,7 @@ function priceForRegistration(courseId, category) {
 }
 
 function paidOrApprovedRegistrationsForCourse(courseId, excludeRegistrationId = "") {
-  return allRegistrationRows().filter(({ registration }) => registration.id !== excludeRegistrationId && registration.courseId === courseId && registration.status !== "Cancelled" && ["Paid", "Approved"].includes(normalizePaymentStatus(registration.paymentStatus)));
+  return allRegistrationRows().filter(({ registration }) => registration.id !== excludeRegistrationId && registration.courseId === courseId && !["Cancelled", "Dropout"].includes(registration.status) && ["Paid", "Approved"].includes(normalizePaymentStatus(registration.paymentStatus)));
 }
 
 function seatStatusForRegistration(courseId, paymentStatus, excludeRegistrationId = "") {
@@ -1044,6 +1044,56 @@ function promoteWaitlistForCourse(courseId) {
   next.registration.status = "Confirmed";
   if (next.registration === currentRegistration(next.participant)) syncParticipantFromRegistration(next.participant, next.registration);
   return next.participant.name;
+}
+
+function reRegistrationReason(registration) {
+  if (registration.status === "Waitlist") return "Waitlist";
+  if (registration.status === "Cancelled") return "Cancellation";
+  if (registration.status === "Dropout" || registration.completion === "Dropout") return "Dropout";
+  return "";
+}
+
+function reRegistrationCandidatesForCourse(course) {
+  if (!course) return [];
+  const seenParticipants = new Set();
+  return allRegistrationRows()
+    .filter(({ participant, registration }) => {
+      const sourceCourse = state.courses.find((item) => item.id === registration.courseId);
+      if (!sourceCourse || sourceCourse.id === course.id) return false;
+      if (sourceCourse.programId !== course.programId) return false;
+      if (sourceCourse.start && course.start && sourceCourse.start > course.start) return false;
+      if (registrationsForParticipant(participant).some((item) => item.courseId === course.id)) return false;
+      return Boolean(reRegistrationReason(registration));
+    })
+    .sort((a, b) => {
+      const priority = { Waitlist: 0, Cancellation: 1, Dropout: 2 };
+      return (priority[reRegistrationReason(a.registration)] ?? 9) - (priority[reRegistrationReason(b.registration)] ?? 9)
+        || (a.registration.registeredOn || "").localeCompare(b.registration.registeredOn || "");
+    })
+    .filter(({ participant }) => {
+      if (seenParticipants.has(participant.id)) return false;
+      seenParticipants.add(participant.id);
+      return true;
+    });
+}
+
+function seedReRegistrationsForCourse(course) {
+  const candidates = reRegistrationCandidatesForCourse(course);
+  candidates.forEach(({ participant, registration: sourceRegistration }) => {
+    const reason = reRegistrationReason(sourceRegistration);
+    const paymentStatus = ["Paid", "Approved"].includes(normalizePaymentStatus(sourceRegistration.paymentStatus)) ? sourceRegistration.paymentStatus : "Payment Pending";
+    const registration = registrationPayloadForCourse(
+      course.id,
+      `Auto re-registration from ${reason} in ${courseName(sourceRegistration.courseId)}.`,
+      sourceRegistration.accommodationType || "Not Required",
+      sourceRegistration.pricingCategory || "",
+      paymentStatus
+    );
+    registration.eligible = normalizePaymentStatus(paymentStatus) === "Approved";
+    registrationsForParticipant(participant).push(registration);
+    if (registration === currentRegistration(participant)) syncParticipantFromRegistration(participant, registration);
+  });
+  return candidates.length;
 }
 
 function roomTypeOptions(selected = "") {
@@ -1698,7 +1748,7 @@ function bulkFieldDefinitions(key) {
       { name: "speciality", label: "Speciality", type: "text" }
     ],
     registrations: [
-      { name: "status", label: "Status", type: "select", options: ["Pending", "Confirmed", "Waitlist", "Cancelled"].map((value) => ({ value, label: value })) },
+      { name: "status", label: "Status", type: "select", options: ["Pending", "Confirmed", "Waitlist", "Dropout", "Cancelled"].map((value) => ({ value, label: value })) },
       { name: "eligible", label: "Eligibility", type: "select", options: yesNo },
       { name: "paymentStatus", label: "Payment Status", type: "select", options: paymentStatuses.map((value) => ({ value, label: value })) },
       { name: "accommodationType", label: "Accommodation Type", type: "select", options: accommodationTypes.map((type) => ({ value: type, label: type })) },
@@ -2343,6 +2393,7 @@ function renderBatchDetail() {
   const status = course.status || programLifecycleStatus(course);
   const showBatchActions = canManageMasters();
   const allowAttendance = canMarkAttendance();
+  const reRegistrationRows = allRegistrationRows().filter(({ registration }) => registration.courseId === course.id && String(registration.notes || "").startsWith("Auto re-registration"));
   $("#batchDetail").innerHTML = `
     <button class="secondary-button link-back-button" type="button" data-record-back="courses">Back to Programs</button>
     ${backLinkHtml()}
@@ -2364,6 +2415,27 @@ function renderBatchDetail() {
       <div><span>Completed</span><strong>${completedCount}/${attendanceRows.length}</strong></div>
       <div><span>Sessions</span><strong>${sessions.length} session(s)</strong></div>
     </div>
+    <section class="batch-attendance-panel">
+      <div class="subform-header">
+        <h3>Re-Registration Queue</h3>
+        <span class="muted">Past waitlisted, cancelled, and dropout candidates automatically carried forward</span>
+      </div>
+      <div class="table-wrap subform-table">
+        <table>
+          <thead><tr><th>Participant</th><th>Source</th><th>Payment</th><th>Status</th></tr></thead>
+          <tbody>
+            ${reRegistrationRows.length ? reRegistrationRows.map(({ participant, registration }) => `
+              <tr>
+                <td><button class="text-link-button" type="button" data-linked-participant="${participant.id}">${participant.name}</button><br><span class="muted">${participant.phone || participant.email || ""}</span></td>
+                <td>${registration.notes}</td>
+                <td>${normalizePaymentStatus(registration.paymentStatus)}<br><span class="muted">${registration.pricingCategory || "General"} | ${Number(registration.amount) || 0}</span></td>
+                <td><span class="pill ${statusClass(registration.status)}">${registration.status}</span></td>
+              </tr>
+            `).join("") : `<tr><td colspan="4"><span class="muted">No automatic re-registration records for this program.</span></td></tr>`}
+          </tbody>
+        </table>
+      </div>
+    </section>
     <section class="batch-attendance-panel">
       <div class="subform-header">
         <h3>Session Plan</h3>
@@ -2967,14 +3039,14 @@ function renderRegistrations() {
         <td>
           ${!showActions ? "<span class=\"muted\">No further actions</span>" : `
             <div class="row-actions">
-              ${registration.status !== "Cancelled" ? `
+              ${!["Cancelled", "Dropout"].includes(registration.status) ? `
                 <button class="secondary-button" type="button" data-action="eligible" data-id="${participant.id}" data-registration-id="${registration.id}">Verify</button>
                 <button class="secondary-button" type="button" data-action="paid" data-id="${participant.id}" data-registration-id="${registration.id}">Mark Paid</button>
                 <button class="secondary-button" type="button" data-action="approve" data-id="${participant.id}" data-registration-id="${registration.id}">Approve</button>
                 <button class="secondary-button" type="button" data-action="confirm" data-id="${participant.id}" data-registration-id="${registration.id}">Confirm</button>
                 <button class="secondary-button" type="button" data-action="waitlist" data-id="${participant.id}" data-registration-id="${registration.id}">Waitlist</button>
                 <button class="danger-button" type="button" data-action="cancel" data-id="${participant.id}" data-registration-id="${registration.id}">Cancel</button>
-              ` : "<span class=\"muted\">Cancelled</span>"}
+              ` : `<span class="muted">${registration.status}</span>`}
             </div>
           `}
         </td>
@@ -3751,6 +3823,20 @@ function updateRoomStatus(roomId, status, notes = "") {
   if (!room) return;
   room.status = normalizeRoomStatus(status);
   room.cleaningNotes = notes;
+}
+
+function releaseAccommodationForRegistration(participant, registration, reason) {
+  if (!registration?.roomId) return null;
+  const room = state.rooms.find((item) => item.id === registration.roomId);
+  const shouldClean = Boolean(registration.checkedIn) || reason === "Dropout";
+  if (room && shouldClean) {
+    updateRoomStatus(room.id, "Dirty", `${reason} by ${participant.name}. Cleaning required before next check-in.`);
+  }
+  registration.roomId = "";
+  registration.checkedIn = false;
+  registration.checkedOut = shouldClean;
+  if (registration === currentRegistration(participant)) syncParticipantFromRegistration(participant, registration);
+  return room;
 }
 
 function markRoomClean(roomId) {
@@ -5009,8 +5095,9 @@ function bindEvents() {
       if (type === "waitlist") updateRegistration(id, registrationId, (registration) => registration.status = "Waitlist", "Participant moved to waitlist.");
       if (type === "cancel") updateRegistration(id, registrationId, (registration) => {
         const courseId = registration.courseId;
+        const participant = state.participants.find((item) => item.id === id);
+        if (participant) releaseAccommodationForRegistration(participant, registration, "Cancellation");
         registration.status = "Cancelled";
-        registration.roomId = "";
         const promoted = promoteWaitlistForCourse(courseId);
         if (promoted) showToast(`${promoted} moved from waitlist to confirmed.`);
       }, "Registration cancelled.");
@@ -5019,7 +5106,20 @@ function bindEvents() {
     if (type === "checkin") updateParticipant(id, (p) => p.checkedIn = true, "Participant checked in.");
     if (type === "attend") updateParticipant(id, (p) => p.attendance += 1, "Attendance recorded.");
     if (type === "complete") updateParticipant(id, (p) => p.completion = "Completed", "Completion approved.");
-    if (type === "dropout") updateParticipant(id, (p) => p.completion = "Dropout", "Dropout recorded.");
+    if (type === "dropout") {
+      const participant = state.participants.find((item) => item.id === id);
+      const registration = participant ? currentRegistration(participant) : null;
+      if (participant && registration) {
+        const courseId = registration.courseId;
+        releaseAccommodationForRegistration(participant, registration, "Dropout");
+        registration.completion = "Dropout";
+        registration.status = "Dropout";
+        syncParticipantFromRegistration(participant, registration);
+        const promoted = promoteWaitlistForCourse(courseId);
+        renderAll();
+        showToast(promoted ? `Dropout recorded. ${promoted} moved from waitlist to confirmed.` : "Dropout recorded.");
+      }
+    }
   });
   document.body.addEventListener("keydown", (event) => {
     if (event.key !== "Enter" && event.key !== " ") return;
@@ -5160,6 +5260,8 @@ function bindEvents() {
         end,
         notes: "Created from program schedule"
       });
+      const reRegistered = seedReRegistrationsForCourse(courseData);
+      if (reRegistered) courseData.reRegisteredCount = reRegistered;
     }
     calendarDate = new Date(`${start}T00:00:00`);
     selectedCourseId = courseId;
@@ -5167,7 +5269,7 @@ function bindEvents() {
     $("#courseDialog").close();
     activateView("courses");
     renderAll();
-    showToast(existingCourse ? "Program updated." : "Program schedule added.");
+    showToast(existingCourse ? "Program updated." : `Program schedule added.${courseData.reRegisteredCount ? ` ${courseData.reRegisteredCount} past candidate(s) re-registered.` : ""}`);
   });
   $("#programForm").addEventListener("submit", (event) => {
     if (event.submitter?.value === "cancel") return;
