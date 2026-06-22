@@ -68,19 +68,35 @@ const views = [
   ["access", "Users & Roles"]
 ];
 
-const navViews = [
-  ["dashboard", "Dashboard"],
-  ["programs", "Courses"],
-  ["courses", "Programs"],
-  ["registrations", "Registrations"],
-  ["participants", "Participants"],
-  ["teachers", "Teachers"],
-  ["accommodation", "Accommodations"],
-  ["allotments", "Room Allotments"],
-  ["halls", "Program Halls"],
-  ["certificates", "Certificates"],
-  ["access", "Users & Roles"]
+const navGroups = [
+  {
+    label: "Management",
+    items: [
+      ["dashboard", "Dashboard"],
+      ["courses", "Programs"],
+      ["registrations", "Registrations"],
+      ["allotments", "Room Allotments"],
+      ["certificates", "Certificates"]
+    ]
+  },
+  {
+    label: "Masters",
+    items: [
+      ["programs", "Courses"],
+      ["teachers", "Teachers"],
+      ["participants", "Participants"],
+      ["accommodation", "Accommodations"],
+      ["halls", "Program Halls"]
+    ]
+  },
+  {
+    label: "Settings",
+    items: [
+      ["access", "Users & Roles"]
+    ]
+  }
 ];
+const navViews = navGroups.flatMap((group) => group.items);
 
 const roleViews = {
   public: [],
@@ -2120,9 +2136,15 @@ function newId(prefix) {
 
 function renderNav() {
   const permitted = allowedViews();
-  $("#nav").innerHTML = navViews
-    .filter(([id]) => permitted.includes(id))
-    .map(([id, label]) => `<button type="button" data-view="${id}" class="${id === currentViewId() ? "is-active" : ""}">${label}</button>`)
+  $("#nav").innerHTML = navGroups
+    .map((group) => {
+      const items = group.items.filter(([id]) => permitted.includes(id));
+      if (!items.length) return "";
+      return `<div class="nav-section">
+        <span class="nav-section-title">${group.label}</span>
+        ${items.map(([id, label]) => `<button type="button" data-view="${id}" class="${id === currentViewId() ? "is-active" : ""}">${label}</button>`).join("")}
+      </div>`;
+    })
     .join("");
   $("#nav").onclick = (event) => {
     const button = event.target.closest("button[data-view]");
