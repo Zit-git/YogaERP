@@ -140,6 +140,8 @@ create table if not exists public.registrations (
   accommodation_type text not null default 'Not Required',
   room_id text references public.rooms(id) on delete set null,
   checked_in boolean not null default false,
+  checkin_date date,
+  checkout_date date,
   attendance integer not null default 0,
   completion text not null default 'Pending',
   certificate boolean not null default false,
