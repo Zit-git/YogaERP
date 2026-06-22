@@ -1746,16 +1746,29 @@ function participantProgramHistory(participant) {
   const registrationRecords = registrationsForParticipant(participant).map((registration) => {
     const batch = state.courses.find((course) => course.id === registration.courseId) || null;
     const courseMaster = courseMasterForBatch(batch);
+    const room = state.rooms.find((item) => item.id === registration.roomId) || null;
+    const stay = stayDateRange(registration);
     return {
       programName: courseMaster?.name || "Not mapped",
       batchName: batch?.name || "Unassigned",
       courseId: registration.courseId,
       start: batch?.start || "",
       end: batch?.end || "",
+      status: registration.status,
+      eligible: registration.eligible,
+      paymentStatus: normalizePaymentStatus(registration.paymentStatus),
+      pricingCategory: registration.pricingCategory || "General",
+      amount: Number(registration.amount) || 0,
       completion: registration.completion,
       attendance: registration.attendance,
       certificate: registration.certificate,
-      accommodation: roomName(registration.roomId)
+      accommodationType: normalizeAccommodationType(registration.accommodationType),
+      accommodation: roomName(registration.roomId),
+      roomType: room?.gender || "",
+      stayStart: stay.start,
+      stayEnd: stay.end,
+      stayStatus: registration.checkedOut ? "Checked out" : registration.checkedIn ? "Checked in" : "Not checked in",
+      notes: registration.notes || ""
     };
   });
   return [...(participant.programHistory || []), ...registrationRecords];
@@ -3167,11 +3180,6 @@ function renderParticipantsMaster() {
     $("#participantDetail").innerHTML = `<p class="muted">No participants recorded yet.</p>`;
     return;
   }
-  const batch = batchForParticipant(selected);
-  const courseMaster = courseMasterForBatch(batch);
-  const room = roomForParticipant(selected);
-  const roomOccupants = room ? state.participants.filter((participant) => currentRegistration(participant)?.roomId === room.id).length : 0;
-  const registration = currentRegistration(selected);
   const programsAttended = participantProgramHistory(selected);
   $("#participantDetail").innerHTML = `
     <button class="secondary-button link-back-button" type="button" data-record-back="participants">Back to Participants</button>
@@ -3185,7 +3193,6 @@ function renderParticipantsMaster() {
             <p class="muted">${selected.email} | ${selected.phone}</p>
           </div>
           ${canEditParticipant(selected.id) ? `<button class="secondary-button" type="button" data-participant-edit="${selected.id}">Edit Personal Details</button>` : ""}
-          <span class="pill ${statusClass(registration.completion)}">${registration.completion}</span>
         </div>
         <div class="profile-meta">
           <span>${selected.age} years</span>
@@ -3196,24 +3203,10 @@ function renderParticipantsMaster() {
     </div>
     <div class="detail-grid">
       <div class="detail-item"><span>Participant</span><strong>${selected.age} years | ${selected.gender}</strong></div>
-      <div class="detail-item"><span>Latest Registration</span><strong>${registration.status}</strong></div>
       <div class="detail-item"><span>Phone</span><strong>${selected.phone}</strong></div>
       <div class="detail-item"><span>Email</span><strong>${selected.email}</strong></div>
       <div class="detail-item"><span>Emergency Contact</span><strong>${selected.emergencyContact || "Not recorded"}</strong></div>
       <div class="detail-item"><span>Address</span><strong>${selected.address || "Not recorded"}</strong></div>
-      <div class="detail-item"><span>Course Master</span><strong>${courseMaster?.name || "Not mapped"}</strong></div>
-      <div class="detail-item"><span>Program</span><strong>${batch?.name || "Unassigned"}</strong></div>
-      <div class="detail-item"><span>Program Dates</span><strong>${batch ? `${batch.start} to ${batch.end}` : "Not scheduled"}</strong></div>
-      <div class="detail-item"><span>Eligibility</span><strong>${registration.eligible ? "Verified" : "Needs review"}</strong></div>
-      <div class="detail-item"><span>Payment</span><strong>${normalizePaymentStatus(registration.paymentStatus)} | ${registration.pricingCategory || "General"} | ${Number(registration.amount) || 0}</strong></div>
-      <div class="detail-item"><span>Course Completion</span><strong>${registration.completion}</strong></div>
-      <div class="detail-item"><span>Attendance</span><strong>${registration.attendance} sessions</strong></div>
-      <div class="detail-item"><span>Certificate</span><strong>${registration.certificate ? "Issued" : "Pending"}</strong></div>
-      <div class="detail-item"><span>Accommodation Type</span><strong>${normalizeAccommodationType(registration.accommodationType)}</strong></div>
-      <div class="detail-item"><span>Stay Dates</span><strong>${stayDateRange(registration).start || "Not set"} to ${stayDateRange(registration).end || "Not set"}</strong></div>
-      <div class="detail-item"><span>Accommodation Details</span><strong>${room?.name || "Not assigned"}</strong></div>
-      <div class="detail-item"><span>Room Type</span><strong>${room ? `${room.gender} | ${roomOccupants}/${room.beds} beds used` : "Not assigned"}</strong></div>
-      <div class="detail-item"><span>Stay Status</span><strong>${registration.checkedOut ? "Checked out" : registration.checkedIn ? "Checked in" : "Not checked in"}</strong></div>
       <div class="detail-item detail-item-wide"><span>Notes</span><strong>${selected.notes || "No special notes recorded."}</strong></div>
     </div>
     <section class="participant-subform">
@@ -3225,25 +3218,29 @@ function renderParticipantsMaster() {
         <table>
           <thead>
             <tr>
-              <th>Program</th>
+              <th>Course</th>
               <th>Program</th>
               <th>Dates</th>
-              <th>Status</th>
+              <th>Registration</th>
+              <th>Payment</th>
+              <th>Completion</th>
               <th>Attendance</th>
-              <th>Certificate</th>
               <th>Accommodation</th>
+              <th>Notes</th>
             </tr>
           </thead>
           <tbody>
             ${programsAttended.map((program) => `
               <tr>
-                <td>${program.programName}</td>
+                <td>${program.programName || "Not mapped"}</td>
                 <td>${program.courseId ? `<button class="text-link-button" type="button" data-linked-batch="${program.courseId}">${program.batchName}</button>` : program.batchName}</td>
                 <td>${program.start && program.end ? `${program.start}<br>${program.end}` : "Not scheduled"}</td>
-                <td><span class="pill ${statusClass(program.completion)}">${program.completion}</span></td>
-                <td>${program.attendance} sessions</td>
-                <td>${program.certificate ? "Issued" : "Pending"}</td>
-                <td>${program.accommodation}</td>
+                <td><span class="pill ${statusClass(program.status || "Pending")}">${program.status || "Pending"}</span><br><span class="muted">${program.eligible ? "Eligibility verified" : "Eligibility needs review"}</span></td>
+                <td>${program.paymentStatus || "Enquiry"}<br><span class="muted">${program.pricingCategory || "General"} | ${Number(program.amount) || 0}</span></td>
+                <td><span class="pill ${statusClass(program.completion || "In Progress")}">${program.completion || "In Progress"}</span><br><span class="muted">${program.certificate ? "Certificate issued" : "Certificate pending"}</span></td>
+                <td>${program.attendance || 0} sessions</td>
+                <td>${program.accommodationType || "Not Required"}<br><span class="muted">${program.accommodation || "Not assigned"}${program.roomType ? ` | ${program.roomType}` : ""}<br>${program.stayStart || "No check-in"} to ${program.stayEnd || "No check-out"} | ${program.stayStatus || "Not checked in"}</span></td>
+                <td>${program.notes || "No notes"}</td>
               </tr>
             `).join("")}
           </tbody>
