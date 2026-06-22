@@ -51,6 +51,12 @@ const tablePageSize = 8;
 const roomTypes = ["Single Occupancy", "Double Occupancy", "Dormitory"];
 const accommodationTypes = ["Not Required", ...roomTypes];
 const roomStatuses = ["Clean", "Cleaning", "Dirty", "Maintenance"];
+const accommodationPricing = {
+  "Not Required": 0,
+  "Dormitory": 300,
+  "Double Occupancy": 800,
+  "Single Occupancy": 1200
+};
 const defaultPricingTiers = [
   { category: "General", amount: 1500 },
   { category: "Students", amount: 150 },
@@ -517,7 +523,7 @@ async function loadRelationalData() {
       status: registration.status || "Pending",
       eligible: Boolean(registration.eligible),
       pricingCategory,
-      amount: Number(registration.amount) || tiers.find((tier) => tier.category === pricingCategory)?.amount || 0,
+      amount: priceForRegistration(registration.batch_id, pricingCategory, registration.accommodation_type),
       paymentStatus: normalizePaymentStatus(registration.payment_status),
       accommodationType: normalizeAccommodationType(registration.accommodation_type),
       roomId: registration.room_id || "",
@@ -762,7 +768,7 @@ async function syncRelationalTables() {
       } : {}),
       ...(supportsRegistrationPayment ? {
         pricing_category: registration.pricingCategory || pricingTiersForCourse(registration.courseId)[0]?.category || "General",
-        amount: Number(registration.amount) || priceForRegistration(registration.courseId, registration.pricingCategory),
+        amount: priceForRegistration(registration.courseId, registration.pricingCategory, registration.accommodationType),
         payment_status: normalizePaymentStatus(registration.paymentStatus)
       } : {})
     };
@@ -1071,9 +1077,29 @@ function pricingTiersForCourse(courseId) {
   return normalizePricingTiers(courseMasterForProgram(courseId)?.pricingTiers);
 }
 
-function priceForRegistration(courseId, category) {
+function coursePriceForRegistration(courseId, category) {
   const tiers = pricingTiersForCourse(courseId);
   return tiers.find((tier) => tier.category === category)?.amount ?? tiers[0]?.amount ?? 0;
+}
+
+function accommodationPriceForType(type) {
+  return accommodationPricing[normalizeAccommodationType(type)] || 0;
+}
+
+function priceForRegistration(courseId, category, accommodationType = "Not Required") {
+  return coursePriceForRegistration(courseId, category) + accommodationPriceForType(accommodationType);
+}
+
+function accommodationTypeOptions(selected = "Not Required") {
+  const normalized = normalizeAccommodationType(selected);
+  return accommodationTypes.map((type) => `<option value="${type}" ${type === normalized ? "selected" : ""}>${type} - ${accommodationPriceForType(type)}</option>`).join("");
+}
+
+function registrationAmountBreakdown(registration) {
+  const coursePrice = coursePriceForRegistration(registration.courseId, registration.pricingCategory);
+  const accommodationPrice = accommodationPriceForType(registration.accommodationType);
+  const total = coursePrice + accommodationPrice;
+  return `${registration.pricingCategory || "General"} | Total ${total} | Program ${coursePrice} + Stay ${accommodationPrice}`;
 }
 
 function isRefresherCategory(category = "") {
@@ -1565,7 +1591,7 @@ function registrationPayloadForCourse(courseId, notes = "", accommodationType = 
     status,
     eligible: normalizedPaymentStatus === "Approved" && !refresherNeedsVerification,
     pricingCategory: selectedCategory,
-    amount: priceForRegistration(courseId, selectedCategory),
+    amount: priceForRegistration(courseId, selectedCategory, accommodationType),
     paymentStatus: normalizedPaymentStatus,
     accommodationType: normalizeAccommodationType(accommodationType),
     roomId: "",
@@ -1942,7 +1968,7 @@ function bulkFieldDefinitions(key) {
       { name: "status", label: "Status", type: "select", options: ["Pending", "Confirmed", "Waitlist", "Dropout", "Cancelled"].map((value) => ({ value, label: value })) },
       { name: "eligible", label: "Eligibility", type: "select", options: yesNo },
       { name: "paymentStatus", label: "Payment Status", type: "select", options: paymentStatuses.map((value) => ({ value, label: value })) },
-      { name: "accommodationType", label: "Accommodation Type", type: "select", options: accommodationTypes.map((type) => ({ value: type, label: type })) },
+      { name: "accommodationType", label: "Accommodation Type", type: "select", options: accommodationTypes.map((type) => ({ value: type, label: `${type} - ${accommodationPriceForType(type)}` })) },
       { name: "checkinDate", label: "Check-In Date", type: "date" },
       { name: "checkoutDate", label: "Check-Out Date", type: "date" },
       { name: "roomId", label: "Room", type: "select", options: [{ value: "", label: "Not assigned" }, ...state.rooms.map((room) => ({ value: room.id, label: room.name }))] }
@@ -2052,7 +2078,7 @@ function addBulkRegistrantRow(values = {}) {
         </label>
         <label>Accommodation Type
           <select data-bulk-field="accommodationType">
-            ${accommodationTypes.map((type) => `<option ${type === (values.accommodationType || "Not Required") ? "selected" : ""}>${type}</option>`).join("")}
+            ${accommodationTypeOptions(values.accommodationType || "Not Required")}
           </select>
         </label>
         <label>Emergency Contact<input data-bulk-field="emergencyContact" value="${values.emergencyContact || ""}"></label>
@@ -2138,7 +2164,10 @@ async function applyBulkEdit(form) {
       state.participants.forEach((participant) => registrationsForParticipant(participant).forEach((registration) => {
         if (registration.id !== id) return;
         if (field === "eligible") registration.eligible = boolValue;
-        else if (field === "accommodationType") registration.accommodationType = normalizeAccommodationType(value);
+        else if (field === "accommodationType") {
+          registration.accommodationType = normalizeAccommodationType(value);
+          registration.amount = priceForRegistration(registration.courseId, registration.pricingCategory, registration.accommodationType);
+        }
         else if (field === "paymentStatus") {
           registration.paymentStatus = normalizePaymentStatus(value);
           registration.status = seatStatusForRegistration(registration.courseId, registration.paymentStatus, registration.id);
@@ -2673,7 +2702,7 @@ function renderBatchDetail() {
               <tr>
                 <td><button class="text-link-button" type="button" data-linked-participant="${participant.id}">${participant.name}</button><br><span class="muted">${participant.phone || participant.email || ""}</span></td>
                 <td>${registration.notes}</td>
-                <td>${normalizePaymentStatus(registration.paymentStatus)}<br><span class="muted">${registration.pricingCategory || "General"} | ${Number(registration.amount) || 0}</span></td>
+                <td>${normalizePaymentStatus(registration.paymentStatus)}<br><span class="muted">${registrationAmountBreakdown(registration)}</span></td>
                 <td><span class="pill ${statusClass(registration.status)}">${registration.status}</span></td>
               </tr>
             `).join("") : `<tr><td colspan="4"><span class="muted">No automatic re-registration records for this program.</span></td></tr>`}
@@ -3236,7 +3265,7 @@ function renderParticipantsMaster() {
                 <td>${program.courseId ? `<button class="text-link-button" type="button" data-linked-batch="${program.courseId}">${program.batchName}</button>` : program.batchName}</td>
                 <td>${program.start && program.end ? `${program.start}<br>${program.end}` : "Not scheduled"}</td>
                 <td><span class="pill ${statusClass(program.status || "Pending")}">${program.status || "Pending"}</span><br><span class="muted">${program.eligible ? "Eligibility verified" : "Eligibility needs review"}</span></td>
-                <td>${program.paymentStatus || "Enquiry"}<br><span class="muted">${program.pricingCategory || "General"} | ${Number(program.amount) || 0}</span></td>
+                <td>${program.paymentStatus || "Enquiry"}<br><span class="muted">${registrationAmountBreakdown(program)}</span></td>
                 <td><span class="pill ${statusClass(program.completion || "In Progress")}">${program.completion || "In Progress"}</span><br><span class="muted">${program.certificate ? "Certificate issued" : "Certificate pending"}</span></td>
                 <td>${program.attendance || 0} sessions</td>
                 <td>${program.accommodationType || "Not Required"}<br><span class="muted">${program.accommodation || "Not assigned"}${program.roomType ? ` | ${program.roomType}` : ""}<br>${program.stayStart || "No check-in"} to ${program.stayEnd || "No check-out"} | ${program.stayStatus || "Not checked in"}</span></td>
@@ -3302,7 +3331,7 @@ function renderRegistrations() {
         <td><strong><button class="text-link-button" type="button" data-linked-participant="${participant.id}">${participant.name}</button></strong><br><span class="muted">${contactLine}</span></td>
         <td><button class="text-link-button" type="button" data-linked-batch="${registration.courseId}">${courseName(registration.courseId)}</button><br><span class="muted">${registration.registeredOn || "Registration date not set"}</span></td>
         <td><span class="pill ${statusClass(registration.status)}">${registration.status}</span></td>
-        <td>${normalizePaymentStatus(registration.paymentStatus)}<br><span class="muted">${registration.pricingCategory || "General"} | ${Number(registration.amount) || 0}</span></td>
+        <td>${normalizePaymentStatus(registration.paymentStatus)}<br><span class="muted">${registrationAmountBreakdown(registration)}</span></td>
         <td>${registration.eligible ? "Verified" : "Needs review"}</td>
         <td>${normalizeAccommodationType(registration.accommodationType)}<br><span class="muted">${roomName(registration.roomId)} | ${stayDateRange(registration).start || "No check-in"} to ${stayDateRange(registration).end || "No check-out"}</span></td>
         <td>
@@ -3855,12 +3884,35 @@ function renderRegistrationPricingOptions() {
   if (!select) return;
   const tiers = pricingTiersForCourse($("#courseSelect")?.value || "");
   select.innerHTML = tiers.map((tier) => `<option value="${tier.category}">${tier.category} - ${tier.amount}</option>`).join("");
+  const accommodationSelect = $("#registrationForm select[name='accommodationType']");
+  if (accommodationSelect) {
+    const selectedAccommodation = accommodationSelect.value || "Not Required";
+    accommodationSelect.innerHTML = accommodationTypeOptions(selectedAccommodation);
+  }
   $$("#bulkRegistrantRows .bulk-registrant-row").forEach((row) => {
     const categorySelect = row.querySelector('[data-bulk-field="pricingCategory"]');
-    if (!categorySelect) return;
-    const selected = categorySelect.value;
-    categorySelect.innerHTML = tiers.map((tier) => `<option value="${tier.category}" ${tier.category === selected ? "selected" : ""}>${tier.category} - ${tier.amount}</option>`).join("");
+    if (categorySelect) {
+      const selected = categorySelect.value;
+      categorySelect.innerHTML = tiers.map((tier) => `<option value="${tier.category}" ${tier.category === selected ? "selected" : ""}>${tier.category} - ${tier.amount}</option>`).join("");
+    }
+    const accommodationSelect = row.querySelector('[data-bulk-field="accommodationType"]');
+    if (accommodationSelect) {
+      const selectedAccommodation = accommodationSelect.value || "Not Required";
+      accommodationSelect.innerHTML = accommodationTypeOptions(selectedAccommodation);
+    }
   });
+  updateRegistrationAmountPreview();
+}
+
+function updateRegistrationAmountPreview() {
+  const preview = $("#registrationAmountPreview");
+  if (!preview) return;
+  const courseId = $("#courseSelect")?.value || "";
+  const category = $("#registrationPricingCategory")?.value || pricingTiersForCourse(courseId)[0]?.category || "General";
+  const accommodationType = $("#registrationForm select[name='accommodationType']")?.value || "Not Required";
+  const coursePrice = coursePriceForRegistration(courseId, category);
+  const accommodationPrice = accommodationPriceForType(accommodationType);
+  preview.textContent = `Total: ${coursePrice + accommodationPrice} | Program ${coursePrice} + Accommodation ${accommodationPrice}`;
 }
 
 function openCourseDialog(courseId = "") {
@@ -4903,6 +4955,11 @@ function bindEvents() {
   });
   $("#addBulkRegistrant").addEventListener("click", () => addBulkRegistrantRow());
   $("#courseSelect").addEventListener("change", () => renderRegistrationPricingOptions());
+  $("#registrationForm").addEventListener("change", (event) => {
+    if (event.target.closest("#registrationPricingCategory") || event.target.closest("[name='accommodationType']")) {
+      updateRegistrationAmountPreview();
+    }
+  });
   $("#courseMasterTabs").addEventListener("click", (event) => {
     const button = event.target.closest("button[data-course-master-tab]");
     if (!button) return;
