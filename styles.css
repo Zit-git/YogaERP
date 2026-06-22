@@ -1497,6 +1497,20 @@ tr:last-child td { border-bottom: 0; }
   font-size: 12px;
 }
 
+.room-allotment-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+  min-width: 220px;
+}
+
+.room-allotment-actions button {
+  padding: 7px 9px;
+  border-radius: 7px;
+  font-size: 12px;
+}
+
 .compact-actions {
   margin-top: 8px;
 }

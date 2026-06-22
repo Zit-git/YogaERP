@@ -3513,11 +3513,11 @@ function renderRoomAllotments() {
       ? `<span class="pill confirmed">Allotted</span><br><span class="muted">${registration.checkedOut ? "Checked out" : registration.checkedIn ? "Checked in" : "Awaiting check-in"}</span>`
       : `<span class="pill pending">Pending</span>`;
     const roomActions = `
-      <div class="row-actions">
+      <div class="room-allotment-actions">
         <button class="primary-button" type="button" data-room-allot-action="${participant.id}" data-registration-id="${registration.id}">${assignedRoom ? "Change Room" : "Allot Room"}</button>
         ${assignedRoom ? `<button class="secondary-button" type="button" data-room-clear-action="${participant.id}" data-registration-id="${registration.id}">Clear</button>` : ""}
-        ${assignedRoom ? `<button class="secondary-button" type="button" data-room-stay-action="checkin" data-id="${participant.id}" data-registration-id="${registration.id}">Check In</button>` : ""}
-        ${assignedRoom ? `<button class="secondary-button" type="button" data-room-stay-action="checkout" data-id="${participant.id}" data-registration-id="${registration.id}">Check Out</button>` : ""}
+        <button class="secondary-button" type="button" data-room-stay-action="checkin" data-id="${participant.id}" data-registration-id="${registration.id}" ${assignedRoom ? "" : "disabled"}>Check In</button>
+        <button class="secondary-button" type="button" data-room-stay-action="checkout" data-id="${participant.id}" data-registration-id="${registration.id}" ${assignedRoom ? "" : "disabled"}>Check Out</button>
       </div>
     `;
     return `<tr>
@@ -3526,9 +3526,11 @@ function renderRoomAllotments() {
       <td><input type="date" value="${stay.start}" data-stay-date="${participant.id}" data-registration-id="${registration.id}" data-stay-field="checkinDate"></td>
       <td><input type="date" value="${stay.end}" data-stay-date="${participant.id}" data-registration-id="${registration.id}" data-stay-field="checkoutDate"></td>
       <td>${normalizeAccommodationType(registration.accommodationType)}<br><span class="muted">${assignedRoom ? assignedRoom.name : "Not allotted"}</span></td>
-      <td><select data-room-allotment="${participant.id}" data-registration-id="${registration.id}">${roomOptions}</select></td>
+      <td>
+        <select data-room-allotment="${participant.id}" data-registration-id="${registration.id}">${roomOptions}</select>
+        ${roomActions}
+      </td>
       <td>${status}</td>
-      <td>${roomActions}</td>
     </tr>`;
   }).join("");
   const availabilityRooms = state.rooms.filter((room) => roomAvailabilityFilter.type === "All" || normalizeRoomType(room.gender) === roomAvailabilityFilter.type);
@@ -3589,8 +3591,8 @@ function renderRoomAllotments() {
         </div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>Participant</th><th>Program</th><th>Check-In</th><th>Check-Out</th><th>Request</th><th>Room</th><th>Status</th><th>Actions</th></tr></thead>
-            <tbody>${rows || `<tr><td colspan="8"><span class="muted">No confirmed registrations need room allotment.</span></td></tr>`}</tbody>
+            <thead><tr><th>Participant</th><th>Program</th><th>Check-In</th><th>Check-Out</th><th>Request</th><th>Room & Actions</th><th>Status</th></tr></thead>
+            <tbody>${rows || `<tr><td colspan="7"><span class="muted">No confirmed registrations need room allotment.</span></td></tr>`}</tbody>
           </table>
         </div>
       </section>
