@@ -1218,6 +1218,13 @@ textarea { resize: vertical; }
   background: var(--accent-soft);
 }
 
+.attendance-actions button.is-selected {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 4px 10px rgba(38, 70, 83, 0.16);
+}
+
 .attendance-actions button:disabled {
   cursor: not-allowed;
   opacity: 0.42;

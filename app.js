@@ -2692,17 +2692,31 @@ function renderBatchDetail() {
                 <td><strong><button class="text-link-button" type="button" data-linked-participant="${participant.id}">${participant.name}</button></strong><br><span class="muted">${participant.phone}</span></td>
                 ${sessions.map((session) => {
                   const record = attendanceForSession(registration, session.id);
-                  const locked = hasEarlierSessionAbsence(registration, session.id);
+                  const locked = hasEarlierSessionAbsence(registration, session.id) && !record;
                   const status = record?.status || "Pending";
+                  const attendanceButtons = [
+                    ["Present", "P"],
+                    ["Late", "L"],
+                    ["Absent", "A"]
+                  ].map(([buttonStatus, label]) => `
+                    <button
+                      type="button"
+                      class="${record?.status === buttonStatus ? "is-selected" : ""}"
+                      title="${locked ? "Blocked after earlier absence" : `Mark ${buttonStatus}`}"
+                      data-attendance-status="${buttonStatus}"
+                      data-id="${participant.id}"
+                      data-registration-id="${registration.id}"
+                      data-session-id="${session.id}"
+                      ${locked ? "disabled" : ""}
+                    >${label}</button>
+                  `).join("");
                   return `<td>
                     <div class="attendance-cell">
                       <span class="pill ${statusClass(status)}">${status}</span>
                       <small>${session.time}<br>${session.topic}</small>
                       ${record?.reason ? `<small>${record.reason}</small>` : ""}
                       ${allowAttendance ? `<div class="attendance-actions">
-                        ${record && record.status !== "Present" ? `<button type="button" title="Mark Present" data-attendance-status="Present" data-id="${participant.id}" data-registration-id="${registration.id}" data-session-id="${session.id}" ${locked ? "disabled" : ""}>P</button>` : ""}
-                        <button type="button" title="Mark Late" data-attendance-status="Late" data-id="${participant.id}" data-registration-id="${registration.id}" data-session-id="${session.id}" ${locked ? "disabled" : ""}>L</button>
-                        <button type="button" title="Mark Absent" data-attendance-status="Absent" data-id="${participant.id}" data-registration-id="${registration.id}" data-session-id="${session.id}" ${locked ? "disabled" : ""}>A</button>
+                        ${attendanceButtons}
                       </div>` : ""}
                     </div>
                   </td>`;
@@ -3926,7 +3940,8 @@ function markSessionAttendance(participantId, registrationId, sessionId, status,
   if (!participant) return;
   const registration = registrationsForParticipant(participant).find((item) => item.id === registrationId);
   if (!registration) return;
-  if (hasEarlierSessionAbsence(registration, sessionId)) {
+  const existing = attendanceForSession(registration, sessionId);
+  if (!existing && hasEarlierSessionAbsence(registration, sessionId)) {
     showToast("Cannot mark further attendance after an absence.");
     return;
   }
@@ -3935,12 +3950,12 @@ function markSessionAttendance(participantId, registrationId, sessionId, status,
     openAttendanceReasonDialog(participantId, registrationId, sessionId, status);
     return;
   }
-  const existing = attendanceForSession(registration, sessionId);
+  const normalizedReason = status === "Present" ? "" : reason;
   if (existing) {
     existing.status = status;
-    existing.reason = reason;
+    existing.reason = normalizedReason;
   } else {
-    registration.sessionAttendance.push({ sessionId, status, reason });
+    registration.sessionAttendance.push({ sessionId, status, reason: normalizedReason });
   }
   if (status === "Absent") {
     const sessions = courseSessionPlan(registration.courseId);
