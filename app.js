@@ -2491,38 +2491,71 @@ function renderCalendar() {
   const startOffset = firstDay.getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const totalCells = Math.ceil((startOffset + daysInMonth) / 7) * 7;
+  const monthStart = new Date(year, month, 1);
+  const monthEnd = new Date(year, month, daysInMonth);
+  const gridStart = new Date(year, month, 1 - startOffset);
   const today = new Date();
   const weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const activePrograms = state.courses
+    .map((course) => ({ course, start: dateFromInput(course.start), end: dateFromInput(course.end) }))
+    .filter(({ course, start, end }) => {
+      if (!start || !end) return false;
+      if (programLifecycleStatus(course) === "Completed") return false;
+      return start <= monthEnd && end >= monthStart;
+    })
+    .sort((first, second) => first.start - second.start || first.end - second.end || first.course.name.localeCompare(second.course.name));
 
   $("#calendarTitle").textContent = formatMonthTitle(calendarDate);
-  const header = weekdays.map((day) => `<div class="calendar-weekday">${day}</div>`).join("");
-  const cells = Array.from({ length: totalCells }, (_, index) => {
-    const dayNumber = index - startOffset + 1;
-    if (dayNumber < 1 || dayNumber > daysInMonth) {
-      return `<div class="calendar-day is-empty"></div>`;
-    }
-    const date = new Date(year, month, dayNumber);
-    const programs = state.courses.filter((course) => {
-      if (programLifecycleStatus(course) === "Completed") return false;
-      const start = new Date(`${course.start}T00:00:00`);
-      const end = new Date(`${course.end}T00:00:00`);
-      return isDateInRange(date, start, end);
+  const header = `<div class="calendar-weekdays">${weekdays.map((day) => `<div class="calendar-weekday">${day}</div>`).join("")}</div>`;
+  const weeks = Array.from({ length: totalCells / 7 }, (_, weekIndex) => {
+    const weekStart = new Date(gridStart);
+    weekStart.setDate(gridStart.getDate() + (weekIndex * 7));
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 6);
+    const segments = activePrograms.flatMap(({ course, start, end }) => {
+      const segmentStart = new Date(Math.max(start.getTime(), weekStart.getTime(), monthStart.getTime()));
+      const segmentEnd = new Date(Math.min(end.getTime(), weekEnd.getTime(), monthEnd.getTime()));
+      if (segmentStart > segmentEnd) return [];
+      return [{
+        course,
+        start,
+        end,
+        segmentStart,
+        segmentEnd,
+        startCol: segmentStart.getDay() + 1,
+        endCol: segmentEnd.getDay() + 1
+      }];
     });
-    return `<div class="calendar-day ${isSameDate(date, today) ? "is-today" : ""}">
-      <div class="calendar-date">${dayNumber}</div>
-      <div class="calendar-programs">
-        ${programs.map((course) => {
-          const start = new Date(`${course.start}T00:00:00`);
-          const end = new Date(`${course.end}T00:00:00`);
-          const marker = isSameDate(date, start) ? "Starts" : isSameDate(date, end) ? "Ends" : "Runs";
-          return `<button class="calendar-program" type="button" data-course-open="${course.id}" title="${course.name}">
-            <span>${marker}</span>${course.name}
-          </button>`;
-        }).join("")}
-      </div>
-    </div>`;
+    const laneEnds = [];
+    segments.forEach((segment) => {
+      const lane = laneEnds.findIndex((endCol) => segment.startCol > endCol);
+      segment.lane = lane >= 0 ? lane : laneEnds.length;
+      laneEnds[segment.lane] = segment.endCol;
+    });
+    const laneCount = Math.max(laneEnds.length, 1);
+    const days = Array.from({ length: 7 }, (_, dayIndex) => {
+      const date = new Date(weekStart);
+      date.setDate(weekStart.getDate() + dayIndex);
+      const inMonth = date.getMonth() === month;
+      return `<div class="calendar-day ${inMonth ? "" : "is-empty"} ${isSameDate(date, today) ? "is-today" : ""}" style="grid-column: ${dayIndex + 1}; grid-row: 1 / span ${laneCount + 1};">
+        ${inMonth ? `<div class="calendar-date">${date.getDate()}</div>` : ""}
+      </div>`;
+    }).join("");
+    const programBars = segments.map((segment) => {
+      const beginsHere = isSameDate(segment.segmentStart, segment.start);
+      const endsHere = isSameDate(segment.segmentEnd, segment.end);
+      const marker = beginsHere && endsHere ? "Full Program" : beginsHere ? "Starts" : endsHere ? "Ends" : "Continues";
+      return `<button
+        class="calendar-program ${beginsHere ? "is-start" : "is-continuation"} ${endsHere ? "is-end" : ""}"
+        type="button"
+        data-course-open="${segment.course.id}"
+        title="${segment.course.name} | ${segment.course.start} to ${segment.course.end}"
+        style="grid-column: ${segment.startCol} / ${segment.endCol + 1}; grid-row: ${segment.lane + 2};"
+      ><span>${marker}</span>${segment.course.name}</button>`;
+    }).join("");
+    return `<div class="calendar-week" style="--calendar-lanes: ${laneCount};">${days}${programBars}</div>`;
   }).join("");
-  $("#programCalendar").innerHTML = header + cells;
+  $("#programCalendar").innerHTML = header + weeks;
 }
 
 function renderCourses() {
