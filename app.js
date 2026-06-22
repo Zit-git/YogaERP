@@ -1200,6 +1200,176 @@ function seedReRegistrationsForCourse(course) {
   return candidates.length;
 }
 
+function sampleSessionTemplates(prefix, days = 3) {
+  return Array.from({ length: days }, (_, index) => {
+    const day = index + 1;
+    return [
+      { id: `${prefix}-d${day}-morning`, day, title: "Morning Practice", time: "06:00-08:00", topic: `Day ${day} asana, pranayama, and kriya practice` },
+      { id: `${prefix}-d${day}-theory`, day, title: "Theory Session", time: "10:30-12:00", topic: `Day ${day} yogic lifestyle and applied philosophy` },
+      { id: `${prefix}-d${day}-evening`, day, title: "Evening Satsang", time: "17:00-18:30", topic: `Day ${day} reflection, chanting, and Q&A` }
+    ];
+  }).flat();
+}
+
+function sampleRegistration(id, courseId, options = {}) {
+  const accommodationType = normalizeAccommodationType(options.accommodationType || "Not Required");
+  const pricingCategory = options.pricingCategory || "General";
+  return {
+    id,
+    courseId,
+    status: options.status || "Confirmed",
+    eligible: options.eligible ?? true,
+    pricingCategory,
+    amount: priceForRegistration(courseId, pricingCategory, accommodationType),
+    paymentStatus: options.paymentStatus || "Approved",
+    accommodationType,
+    roomId: options.roomId || "",
+    checkedIn: Boolean(options.checkedIn),
+    checkedOut: Boolean(options.checkedOut),
+    checkinDate: options.checkinDate || "",
+    checkoutDate: options.checkoutDate || "",
+    attendance: 0,
+    completion: options.completion || "Completed",
+    certificate: Boolean(options.certificate),
+    sessionAttendance: [],
+    notes: options.notes || "",
+    registeredOn: options.registeredOn || ""
+  };
+}
+
+function setSampleAttendance(registration, mode = "complete") {
+  const sessions = courseSessionPlan(registration.courseId);
+  registration.sessionAttendance = sessions.map((session, index) => {
+    if (mode === "late" && index === 1) return { sessionId: session.id, status: "Late", reason: "Arrived after morning roll call due to travel delay." };
+    if (mode === "absent" && index === 2) return { sessionId: session.id, status: "Absent", reason: "Medical rest advised by the program coordinator." };
+    if (mode === "dropout" && index >= 3) return null;
+    return { sessionId: session.id, status: "Present", reason: "" };
+  }).filter(Boolean);
+  updateRegistrationCompletion(registration);
+  if (mode === "dropout") {
+    registration.status = "Dropout";
+    registration.completion = "Dropout";
+    registration.certificate = false;
+  }
+  if (mode === "absent") registration.certificate = false;
+}
+
+function addSampleData() {
+  if (!canManageMasters()) {
+    showToast("Only Admins can generate sample data.");
+    return;
+  }
+  const hasSampleData = [
+    ...state.programs,
+    ...state.courses,
+    ...state.teachers,
+    ...state.participants,
+    ...state.rooms,
+    ...state.halls
+  ].some((record) => String(record.id || "").startsWith("SAMPLE-"));
+  if (hasSampleData) {
+    showToast("Sample data is already available.");
+    return;
+  }
+
+  const teachers = [
+    { id: "SAMPLE-TEACHER-001", title: "Shri", firstName: "Narayanan", lastName: "Iyer", name: "Shri Narayanan Iyer", speciality: "Classical Yoga", phone: "90000 11001", email: "narayanan.sample@aliyar.org", photo: "https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&w=400&q=80", contactNumber: "90000 11001", education: "M.Sc Yoga Therapy, 18 years teaching experience", gender: "Male", maritalStatus: "Married", notes: "Leads foundation residential programs." },
+    { id: "SAMPLE-TEACHER-002", title: "Smt", firstName: "Meenakshi", lastName: "Raman", name: "Smt Meenakshi Raman", speciality: "Meditation & Satsang", phone: "90000 11002", email: "meenakshi.sample@aliyar.org", photo: "https://images.unsplash.com/photo-1580894732444-8ecded7900cd?auto=format&fit=crop&w=400&q=80", contactNumber: "90000 11002", education: "Diploma in Yoga Education, Counselling certification", gender: "Female", maritalStatus: "Married", notes: "Handles meditation and participant counselling." },
+    { id: "SAMPLE-TEACHER-003", title: "Dr", firstName: "Karthik", lastName: "Sundar", name: "Dr Karthik Sundar", speciality: "Yoga Therapy", phone: "90000 11003", email: "karthik.sample@aliyar.org", photo: "https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?auto=format&fit=crop&w=400&q=80", contactNumber: "90000 11003", education: "BNYS, PhD Yoga Therapy", gender: "Male", maritalStatus: "Single", notes: "Reviews health notes and therapy modifications." }
+  ];
+  teachers.forEach((teacher) => state.teachers.push(teacher));
+
+  const programs = [
+    { id: "SAMPLE-PROGRAM-ROOT", parentId: "", code: "YOGA-RES", name: "Residential Yoga Courses", level: "Family", duration: "", eligibility: "Open course family", sessionTemplates: [], teacherIds: teachers.map((teacher) => teacher.id), pricingTiers: defaultPricingTiers },
+    { id: "SAMPLE-PROGRAM-FOUNDATION", parentId: "SAMPLE-PROGRAM-ROOT", code: "FND", name: "Foundation Yoga", level: "Level 1", duration: "3 days", eligibility: "Age 18 and above", sessionTemplates: sampleSessionTemplates("sample-foundation", 3), teacherIds: ["SAMPLE-TEACHER-001", "SAMPLE-TEACHER-002"], pricingTiers: [{ category: "General", amount: 1500 }, { category: "Students", amount: 150 }, { category: "Refresher", amount: 750 }, { category: "Ex-Servicemen", amount: 150 }] },
+    { id: "SAMPLE-PROGRAM-ADVANCED", parentId: "SAMPLE-PROGRAM-FOUNDATION", code: "ADV", name: "Advanced Practice", level: "Level 2", duration: "4 days", eligibility: "Completed Foundation Yoga", sessionTemplates: sampleSessionTemplates("sample-advanced", 4), teacherIds: ["SAMPLE-TEACHER-001", "SAMPLE-TEACHER-003"], pricingTiers: [{ category: "General", amount: 2200 }, { category: "Students", amount: 350 }, { category: "Refresher", amount: 900 }] },
+    { id: "SAMPLE-PROGRAM-THERAPY", parentId: "SAMPLE-PROGRAM-ROOT", code: "THY", name: "Yoga Therapy Camp", level: "Therapy", duration: "5 days", eligibility: "Health review required", sessionTemplates: sampleSessionTemplates("sample-therapy", 5), teacherIds: ["SAMPLE-TEACHER-002", "SAMPLE-TEACHER-003"], pricingTiers: [{ category: "General", amount: 2800 }, { category: "Students", amount: 500 }, { category: "Refresher", amount: 1200 }] }
+  ];
+  programs.forEach((program) => state.programs.push(program));
+
+  const blocks = [
+    { id: "SAMPLE-BLOCK-A", name: "Annamalai Block", gender: "", notes: "Sample residential block near practice hall" },
+    { id: "SAMPLE-BLOCK-B", name: "Bharathi Block", gender: "", notes: "Sample family and teacher accommodation block" }
+  ];
+  const floors = [
+    { id: "SAMPLE-FLOOR-A1", blockId: "SAMPLE-BLOCK-A", name: "Ground Floor" },
+    { id: "SAMPLE-FLOOR-A2", blockId: "SAMPLE-BLOCK-A", name: "First Floor" },
+    { id: "SAMPLE-FLOOR-B1", blockId: "SAMPLE-BLOCK-B", name: "Ground Floor" }
+  ];
+  const rooms = [
+    { id: "SAMPLE-ROOM-A101", blockId: "SAMPLE-BLOCK-A", floorId: "SAMPLE-FLOOR-A1", name: "A101", gender: "Dormitory", beds: 6, status: "Clean", cleaningNotes: "" },
+    { id: "SAMPLE-ROOM-A102", blockId: "SAMPLE-BLOCK-A", floorId: "SAMPLE-FLOOR-A1", name: "A102", gender: "Dormitory", beds: 6, status: "Dirty", cleaningNotes: "Checked out after May Foundation batch. Cleaning pending." },
+    { id: "SAMPLE-ROOM-A201", blockId: "SAMPLE-BLOCK-A", floorId: "SAMPLE-FLOOR-A2", name: "A201", gender: "Double Occupancy", beds: 2, status: "Clean", cleaningNotes: "" },
+    { id: "SAMPLE-ROOM-A202", blockId: "SAMPLE-BLOCK-A", floorId: "SAMPLE-FLOOR-A2", name: "A202", gender: "Double Occupancy", beds: 2, status: "Cleaning", cleaningNotes: "Laundry pending after dropout release." },
+    { id: "SAMPLE-ROOM-B101", blockId: "SAMPLE-BLOCK-B", floorId: "SAMPLE-FLOOR-B1", name: "B101", gender: "Single Occupancy", beds: 1, status: "Clean", cleaningNotes: "" },
+    { id: "SAMPLE-ROOM-B102", blockId: "SAMPLE-BLOCK-B", floorId: "SAMPLE-FLOOR-B1", name: "B102", gender: "Single Occupancy", beds: 1, status: "Maintenance", cleaningNotes: "Plumbing check scheduled." }
+  ];
+  const halls = [
+    { id: "SAMPLE-HALL-LOTUS", name: "Lotus Hall", capacity: 80, location: "Main campus", notes: "Primary yoga practice hall" },
+    { id: "SAMPLE-HALL-PEEPAL", name: "Peepal Hall", capacity: 45, location: "East wing", notes: "Therapy and discussion hall" }
+  ];
+  state.blocks.push(...blocks);
+  state.floors.push(...floors);
+  state.rooms.push(...rooms);
+  state.halls.push(...halls);
+
+  const courses = [
+    { id: "SAMPLE-BATCH-FND-FEB", programId: "SAMPLE-PROGRAM-FOUNDATION", name: "Foundation Yoga - February 2026", start: "2026-02-10", end: "2026-02-12", seats: 4, hallId: "SAMPLE-HALL-LOTUS", hall: "Lotus Hall", teacher: "Shri Narayanan Iyer", eligibility: "Age 18 and above", status: "Completed" },
+    { id: "SAMPLE-BATCH-FND-MAY", programId: "SAMPLE-PROGRAM-FOUNDATION", name: "Foundation Yoga - May 2026", start: "2026-05-01", end: "2026-05-05", seats: 3, hallId: "SAMPLE-HALL-LOTUS", hall: "Lotus Hall", teacher: "Smt Meenakshi Raman", eligibility: "Age 18 and above", status: "Completed" },
+    { id: "SAMPLE-BATCH-ADV-MAY", programId: "SAMPLE-PROGRAM-ADVANCED", name: "Advanced Practice - May 2026", start: "2026-05-04", end: "2026-05-07", seats: 2, hallId: "SAMPLE-HALL-PEEPAL", hall: "Peepal Hall", teacher: "Dr Karthik Sundar", eligibility: "Completed Foundation Yoga", status: "Completed" },
+    { id: "SAMPLE-BATCH-THY-MAY", programId: "SAMPLE-PROGRAM-THERAPY", name: "Yoga Therapy Camp - May 2026", start: "2026-05-05", end: "2026-05-09", seats: 2, hallId: "SAMPLE-HALL-PEEPAL", hall: "Peepal Hall", teacher: "Dr Karthik Sundar", eligibility: "Health review required", status: "Completed" },
+    { id: "SAMPLE-BATCH-FND-JUN", programId: "SAMPLE-PROGRAM-FOUNDATION", name: "Foundation Yoga - June 2026", start: "2026-06-01", end: "2026-06-03", seats: 2, hallId: "SAMPLE-HALL-LOTUS", hall: "Lotus Hall", teacher: "Shri Narayanan Iyer", eligibility: "Age 18 and above", status: "Completed" }
+  ];
+  courses.forEach((course) => {
+    state.courses.push(course);
+    course.sessions = defaultSessionPlan(course.id);
+    state.hallBookings.push({ id: `${course.id}-HALL`, courseId: course.id, hallId: course.hallId, start: course.start, end: course.end, notes: "Sample hall booking" });
+  });
+
+  const participants = [
+    { id: "SAMPLE-PART-001", name: "Ananya Rao", age: 28, gender: "Female", phone: "98840 20001", email: "ananya.sample@example.com", address: "Coimbatore, Tamil Nadu", emergencyContact: "Ravi Rao - 98840 29901", photo: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=400&q=80", notes: "Vegetarian meals. Completed multiple programs.", registrations: [] },
+    { id: "SAMPLE-PART-002", name: "Bala Krishnan", age: 42, gender: "Male", phone: "98840 20002", email: "bala.sample@example.com", address: "Pollachi, Tamil Nadu", emergencyContact: "Lakshmi - 98840 29902", photo: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=400&q=80", notes: "Requested single occupancy.", registrations: [] },
+    { id: "SAMPLE-PART-003", name: "Charu Menon", age: 21, gender: "Female", phone: "98840 20003", email: "charu.sample@example.com", address: "Palakkad, Kerala", emergencyContact: "Meera - 98840 29903", photo: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80", notes: "Student pricing approved.", registrations: [] },
+    { id: "SAMPLE-PART-004", name: "Dev Prakash", age: 35, gender: "Male", phone: "98840 20004", email: "dev.sample@example.com", address: "Chennai, Tamil Nadu", emergencyContact: "Kavitha - 98840 29904", photo: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=400&q=80", notes: "Waitlisted in May Foundation and re-registered in June.", registrations: [] },
+    { id: "SAMPLE-PART-005", name: "Eshwari Natarajan", age: 51, gender: "Female", phone: "98840 20005", email: "eshwari.sample@example.com", address: "Madurai, Tamil Nadu", emergencyContact: "Sridhar - 98840 29905", photo: "https://images.unsplash.com/photo-1551836022-d5d88e9218df?auto=format&fit=crop&w=400&q=80", notes: "Cancelled due to travel issue.", registrations: [] },
+    { id: "SAMPLE-PART-006", name: "Farhan Ali", age: 33, gender: "Male", phone: "98840 20006", email: "farhan.sample@example.com", address: "Bengaluru, Karnataka", emergencyContact: "Nadia - 98840 29906", photo: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80", notes: "Dropped out during therapy camp.", registrations: [] },
+    { id: "SAMPLE-PART-007", name: "Gayathri S", age: 46, gender: "Female", phone: "98840 20007", email: "gayathri.sample@example.com", address: "Erode, Tamil Nadu", emergencyContact: "Suresh - 98840 29907", photo: "https://images.unsplash.com/photo-1544723795-3fb6469f5b39?auto=format&fit=crop&w=400&q=80", notes: "Refresher participant verified from past completion.", registrations: [] },
+    { id: "SAMPLE-PART-008", name: "Harish Kumar", age: 39, gender: "Male", phone: "98840 20008", email: "harish.sample@example.com", address: "Salem, Tamil Nadu", emergencyContact: "Priya - 98840 29908", photo: "https://images.unsplash.com/photo-1507591064344-4c6ce005b128?auto=format&fit=crop&w=400&q=80", notes: "Late arrival recorded in attendance.", registrations: [] }
+  ];
+
+  const byId = Object.fromEntries(participants.map((participant) => [participant.id, participant]));
+  const registrations = [
+    ["SAMPLE-PART-001", sampleRegistration("SAMPLE-REG-001", "SAMPLE-BATCH-FND-FEB", { pricingCategory: "General", accommodationType: "Dormitory", roomId: "SAMPLE-ROOM-A101", checkedOut: true, checkinDate: "2026-02-10", checkoutDate: "2026-02-12", certificate: true, registeredOn: "2026-01-18", notes: "Completed Foundation and received certificate." }), "complete"],
+    ["SAMPLE-PART-001", sampleRegistration("SAMPLE-REG-002", "SAMPLE-BATCH-ADV-MAY", { pricingCategory: "Refresher", accommodationType: "Double Occupancy", roomId: "SAMPLE-ROOM-A201", checkedOut: true, checkinDate: "2026-05-04", checkoutDate: "2026-05-07", certificate: true, registeredOn: "2026-04-01", notes: "Advanced registration based on prior completion." }), "late"],
+    ["SAMPLE-PART-002", sampleRegistration("SAMPLE-REG-003", "SAMPLE-BATCH-FND-MAY", { pricingCategory: "General", accommodationType: "Single Occupancy", roomId: "SAMPLE-ROOM-B101", checkedOut: true, checkinDate: "2026-05-01", checkoutDate: "2026-05-05", certificate: true, registeredOn: "2026-04-02", notes: "Single occupancy charged with program fee." }), "complete"],
+    ["SAMPLE-PART-003", sampleRegistration("SAMPLE-REG-004", "SAMPLE-BATCH-FND-MAY", { pricingCategory: "Students", accommodationType: "Dormitory", roomId: "SAMPLE-ROOM-A102", checkedOut: true, checkinDate: "2026-05-01", checkoutDate: "2026-05-05", certificate: true, registeredOn: "2026-04-03", notes: "Student pricing plus dormitory stay." }), "late"],
+    ["SAMPLE-PART-004", sampleRegistration("SAMPLE-REG-005", "SAMPLE-BATCH-FND-MAY", { status: "Waitlist", pricingCategory: "General", accommodationType: "Dormitory", paymentStatus: "Paid", eligible: true, registeredOn: "2026-04-05", completion: "Pending", notes: "Waitlisted due to seat limit; carried into June batch." }), "none"],
+    ["SAMPLE-PART-004", sampleRegistration("SAMPLE-REG-006", "SAMPLE-BATCH-FND-JUN", { pricingCategory: "General", accommodationType: "Dormitory", roomId: "SAMPLE-ROOM-A101", checkedOut: true, checkinDate: "2026-06-01", checkoutDate: "2026-06-03", certificate: true, registeredOn: "2026-05-10", notes: "Auto re-registration from May waitlist." }), "complete"],
+    ["SAMPLE-PART-005", sampleRegistration("SAMPLE-REG-007", "SAMPLE-BATCH-ADV-MAY", { status: "Cancelled", pricingCategory: "General", accommodationType: "Double Occupancy", paymentStatus: "Payment Pending", eligible: false, registeredOn: "2026-04-08", completion: "Pending", notes: "Cancelled before check-in; accommodation released." }), "none"],
+    ["SAMPLE-PART-006", sampleRegistration("SAMPLE-REG-008", "SAMPLE-BATCH-THY-MAY", { status: "Dropout", pricingCategory: "General", accommodationType: "Double Occupancy", roomId: "SAMPLE-ROOM-A202", checkedOut: true, checkinDate: "2026-05-05", checkoutDate: "2026-05-07", certificate: false, registeredOn: "2026-04-11", completion: "Dropout", notes: "Dropped out on day 3; room moved to cleaning." }), "dropout"],
+    ["SAMPLE-PART-007", sampleRegistration("SAMPLE-REG-009", "SAMPLE-BATCH-FND-FEB", { pricingCategory: "General", accommodationType: "Not Required", certificate: true, registeredOn: "2026-01-20", notes: "Local participant without accommodation." }), "complete"],
+    ["SAMPLE-PART-007", sampleRegistration("SAMPLE-REG-010", "SAMPLE-BATCH-FND-JUN", { pricingCategory: "Refresher", accommodationType: "Single Occupancy", roomId: "SAMPLE-ROOM-B101", checkedOut: true, checkinDate: "2026-06-01", checkoutDate: "2026-06-03", certificate: true, registeredOn: "2026-05-12", notes: "Refresher pricing verified against past completion." }), "complete"],
+    ["SAMPLE-PART-008", sampleRegistration("SAMPLE-REG-011", "SAMPLE-BATCH-THY-MAY", { pricingCategory: "Ex-Servicemen", accommodationType: "Dormitory", roomId: "SAMPLE-ROOM-A102", checkedOut: true, checkinDate: "2026-05-05", checkoutDate: "2026-05-09", certificate: false, registeredOn: "2026-04-13", notes: "Absent session retained with reason; certificate pending." }), "absent"]
+  ];
+  registrations.forEach(([participantId, registration, attendanceMode]) => {
+    if (attendanceMode !== "none") setSampleAttendance(registration, attendanceMode);
+    byId[participantId].registrations.push(registration);
+  });
+  participants.forEach((participant) => {
+    syncParticipantFromRegistration(participant, currentRegistration(participant));
+    state.participants.push(participant);
+  });
+
+  calendarDate = new Date("2026-05-01T00:00:00");
+  selectedCourseId = "SAMPLE-BATCH-FND-MAY";
+  selectedProgramId = "SAMPLE-PROGRAM-FOUNDATION";
+  selectedParticipantId = "SAMPLE-PART-001";
+  openDetailView = { courses: false, programs: false, teachers: false, participants: false };
+  activateView("courses");
+  renderAll();
+  showToast("Sample past-program data generated and queued for Supabase sync.");
+}
+
 function roomTypeOptions(selected = "") {
   const normalized = normalizeRoomType(selected);
   return roomTypes.map((type) => ({ value: type, label: type, selected: type === normalized }));
@@ -2523,6 +2693,8 @@ function renderMetrics() {
 }
 
 function renderDashboard() {
+  const sampleButton = $("#generateSampleData");
+  if (sampleButton) sampleButton.hidden = !canManageMasters();
   renderCalendar();
 }
 
@@ -4887,6 +5059,7 @@ function bindEvents() {
     openRegistrationDialog();
   });
   $("#forgotPasswordButton").addEventListener("click", () => $("#forgotPasswordDialog").showModal());
+  $("#generateSampleData").addEventListener("click", () => addSampleData());
   $("#previousMonth").addEventListener("click", () => {
     calendarDate = new Date(calendarDate.getFullYear(), calendarDate.getMonth() - 1, 1);
     renderCalendar();
