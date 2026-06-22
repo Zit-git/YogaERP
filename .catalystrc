@@ -1,0 +1,82 @@
+{
+  "defaults": {
+    "project": 3,
+    "env": 1
+  },
+  "actives": {
+    "project": 3,
+    "env": 1
+  },
+  "projects": [
+    {
+      "idx": 1,
+      "id": "10082000000024005",
+      "name": "YogaERP",
+      "domain": {
+        "id": "50043336663",
+        "name": "yogaerp-60032841822.development"
+      },
+      "timezone": "Asia/Kolkata",
+      "env": [
+        {
+          "idx": 1,
+          "id": "60032841822",
+          "name": "Development",
+          "type": 3,
+          "env_status": "Active",
+          "project_details": {
+            "project_name": "YogaERP",
+            "id": "10082000000024005",
+            "project_type": "Live"
+          },
+          "is_default": true,
+          "action_required": false
+        }
+      ]
+    },
+    {
+      "idx": 2,
+      "id": "10082000000024029",
+      "name": "YogERP",
+      "domain": {
+        "id": "50043336945",
+        "name": "yogerp-60032841822.development"
+      },
+      "timezone": "Asia/Kolkata",
+      "env": [
+        {
+          "idx": 1,
+          "id": "60032841822",
+          "name": "Development",
+          "type": 3,
+          "env_status": "Active",
+          "project_details": {
+            "project_name": "YogERP",
+            "id": "10082000000024029",
+            "project_type": "Live"
+          },
+          "is_default": true,
+          "action_required": false
+        }
+      ]
+    },
+    {
+      "idx": 3,
+      "id": "10082000000024058",
+      "name": "AliyarPrograms",
+      "domain": {
+        "id": "50043337619",
+        "name": "aliyarprograms-60032841822.development"
+      },
+      "timezone": "Asia/Kolkata",
+      "env": [
+        {
+          "idx": 1,
+          "id": "60032841822",
+          "name": "Development",
+          "type": 3
+        }
+      ]
+    }
+  ]
+}
