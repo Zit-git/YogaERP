@@ -3512,12 +3512,14 @@ function renderRoomAllotments() {
     const status = assignedRoom
       ? `<span class="pill confirmed">Allotted</span><br><span class="muted">${registration.checkedOut ? "Checked out" : registration.checkedIn ? "Checked in" : "Awaiting check-in"}</span>`
       : `<span class="pill pending">Pending</span>`;
-    const stayActions = assignedRoom ? `
+    const roomActions = `
       <div class="row-actions">
-        <button class="secondary-button" type="button" data-room-stay-action="checkin" data-id="${participant.id}" data-registration-id="${registration.id}">Check In</button>
-        <button class="secondary-button" type="button" data-room-stay-action="checkout" data-id="${participant.id}" data-registration-id="${registration.id}">Check Out</button>
+        <button class="primary-button" type="button" data-room-allot-action="${participant.id}" data-registration-id="${registration.id}">${assignedRoom ? "Change Room" : "Allot Room"}</button>
+        ${assignedRoom ? `<button class="secondary-button" type="button" data-room-clear-action="${participant.id}" data-registration-id="${registration.id}">Clear</button>` : ""}
+        ${assignedRoom ? `<button class="secondary-button" type="button" data-room-stay-action="checkin" data-id="${participant.id}" data-registration-id="${registration.id}">Check In</button>` : ""}
+        ${assignedRoom ? `<button class="secondary-button" type="button" data-room-stay-action="checkout" data-id="${participant.id}" data-registration-id="${registration.id}">Check Out</button>` : ""}
       </div>
-    ` : "";
+    `;
     return `<tr>
       <td><strong><button class="text-link-button" type="button" data-linked-participant="${participant.id}">${participant.name}</button></strong><br><span class="muted">${participant.phone || participant.email || "Contact not captured"}</span></td>
       <td>${course ? `<button class="text-link-button" type="button" data-linked-batch="${course.id}">${course.name}</button>` : "Program not found"}<br><span class="muted">${course ? `${course.start} to ${course.end}` : "Program dates missing"}</span></td>
@@ -3525,7 +3527,8 @@ function renderRoomAllotments() {
       <td><input type="date" value="${stay.end}" data-stay-date="${participant.id}" data-registration-id="${registration.id}" data-stay-field="checkoutDate"></td>
       <td>${normalizeAccommodationType(registration.accommodationType)}<br><span class="muted">${assignedRoom ? assignedRoom.name : "Not allotted"}</span></td>
       <td><select data-room-allotment="${participant.id}" data-registration-id="${registration.id}">${roomOptions}</select></td>
-      <td>${status}${stayActions}</td>
+      <td>${status}</td>
+      <td>${roomActions}</td>
     </tr>`;
   }).join("");
   const availabilityRooms = state.rooms.filter((room) => roomAvailabilityFilter.type === "All" || normalizeRoomType(room.gender) === roomAvailabilityFilter.type);
@@ -3586,8 +3589,8 @@ function renderRoomAllotments() {
         </div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>Participant</th><th>Program</th><th>Check-In</th><th>Check-Out</th><th>Request</th><th>Room</th><th>Status</th></tr></thead>
-            <tbody>${rows || `<tr><td colspan="7"><span class="muted">No confirmed registrations need room allotment.</span></td></tr>`}</tbody>
+            <thead><tr><th>Participant</th><th>Program</th><th>Check-In</th><th>Check-Out</th><th>Request</th><th>Room</th><th>Status</th><th>Actions</th></tr></thead>
+            <tbody>${rows || `<tr><td colspan="8"><span class="muted">No confirmed registrations need room allotment.</span></td></tr>`}</tbody>
           </table>
         </div>
       </section>
@@ -4983,11 +4986,6 @@ function bindEvents() {
     if (event.target.closest("[data-program-teacher-option]")) syncProgramTeacherSelection();
   });
   $("#roomAllotmentContent").addEventListener("change", (event) => {
-    const allotment = event.target.closest("[data-room-allotment]");
-    if (allotment) {
-      allotRoomToRegistration(allotment.dataset.roomAllotment, allotment.dataset.registrationId, allotment.value);
-      return;
-    }
     const stayDate = event.target.closest("[data-stay-date]");
     if (stayDate) {
       updateRegistrationStayDate(stayDate.dataset.stayDate, stayDate.dataset.registrationId, stayDate.dataset.stayField, stayDate.value);
@@ -5014,6 +5012,21 @@ function bindEvents() {
     }
   });
   $("#roomAllotmentContent").addEventListener("click", (event) => {
+    const allotAction = event.target.closest("[data-room-allot-action]");
+    if (allotAction) {
+      const select = document.querySelector(`[data-room-allotment="${allotAction.dataset.roomAllotAction}"][data-registration-id="${allotAction.dataset.registrationId}"]`);
+      if (!select?.value) {
+        showToast("Select a room before allotting.");
+        return;
+      }
+      allotRoomToRegistration(allotAction.dataset.roomAllotAction, allotAction.dataset.registrationId, select.value);
+      return;
+    }
+    const clearAction = event.target.closest("[data-room-clear-action]");
+    if (clearAction) {
+      allotRoomToRegistration(clearAction.dataset.roomClearAction, clearAction.dataset.registrationId, "");
+      return;
+    }
     const stayAction = event.target.closest("[data-room-stay-action]");
     if (stayAction) {
       updateStayLifecycle(stayAction.dataset.id, stayAction.dataset.registrationId, stayAction.dataset.roomStayAction);
