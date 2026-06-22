@@ -279,6 +279,7 @@
               <button data-filter="Pending" type="button">Pending</button>
               <button data-filter="Confirmed" type="button">Confirmed</button>
               <button data-filter="Waitlist" type="button">Waitlist</button>
+              <button data-filter="Cancelled" type="button">Cancelled</button>
             </div>
           </div>
         </div>
@@ -445,6 +446,15 @@
           </label>
           <label>Phone<input name="phone" required></label>
           <label>Email ID<input name="email" type="email" required></label>
+          <label>Pricing Category<select name="pricingCategory" id="registrationPricingCategory"></select></label>
+          <label>Payment Status
+            <select name="paymentStatus">
+              <option>Enquiry</option>
+              <option>Payment Pending</option>
+              <option>Paid</option>
+              <option>Approved</option>
+            </select>
+          </label>
           <label>Accommodation Type
             <select name="accommodationType">
               <option>Not Required</option>
@@ -545,6 +555,9 @@
             </details>
           </label>
           <label class="wide">Eligibility<textarea name="eligibility" rows="3" required></textarea></label>
+          <label class="wide">Pricing Categories
+            <textarea name="pricingText" rows="4" placeholder="General - 1500&#10;Students - 150&#10;Ex-Servicemen - 150"></textarea>
+          </label>
         </div>
         <menu>
           <button class="secondary-button" id="cancelProgram" value="cancel" type="button">Cancel</button>
@@ -729,6 +742,6 @@
     <div id="toast" role="status" aria-live="polite"></div>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="supabase-config.js?v=35"></script>
-    <script src="app.js?v=105"></script>
+    <script src="app.js?v=106"></script>
   </body>
 </html>

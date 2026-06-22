@@ -10,6 +10,7 @@ create table if not exists public.course_masters (
   eligibility text,
   session_templates jsonb not null default '[]'::jsonb,
   teacher_ids jsonb not null default '[]'::jsonb,
+  pricing_tiers jsonb not null default '[{"category":"General","amount":1500}]'::jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -139,6 +140,9 @@ create table if not exists public.registrations (
   batch_id text references public.batches(id) on delete restrict,
   status text not null default 'Pending',
   eligible boolean not null default false,
+  pricing_category text,
+  amount numeric not null default 0,
+  payment_status text not null default 'Enquiry',
   accommodation_type text not null default 'Not Required',
   room_id text references public.rooms(id) on delete set null,
   checked_in boolean not null default false,

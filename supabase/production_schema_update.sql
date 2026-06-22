@@ -11,14 +11,18 @@ alter table public.registrations
   add column if not exists accommodation_type text not null default 'Not Required',
   add column if not exists checkin_date date,
   add column if not exists checkout_date date,
-  add column if not exists checked_out boolean not null default false;
+  add column if not exists checked_out boolean not null default false,
+  add column if not exists pricing_category text,
+  add column if not exists amount numeric not null default 0,
+  add column if not exists payment_status text not null default 'Enquiry';
 
 alter table public.rooms
   add column if not exists status text not null default 'Clean',
   add column if not exists cleaning_notes text;
 
 alter table public.course_masters
-  add column if not exists teacher_ids jsonb not null default '[]'::jsonb;
+  add column if not exists teacher_ids jsonb not null default '[]'::jsonb,
+  add column if not exists pricing_tiers jsonb not null default '[{"category":"General","amount":1500}]'::jsonb;
 
 alter table public.batches
   add column if not exists status text not null default 'Upcoming';
