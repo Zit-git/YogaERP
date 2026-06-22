@@ -166,11 +166,11 @@ async function loadRemoteData() {
     renderNav();
     if (lifecycleChanged) persistRemoteData();
   } catch (error) {
-    remoteStatus = "Supabase unavailable";
+    remoteStatus = "Data connection unavailable";
     hasLoadedRemoteData = false;
     isHydratingRemoteData = false;
     renderAuthState();
-    showToast(error.message || "Unable to load Supabase data.");
+    showToast(friendlyErrorMessage(error, "Unable to load data from Supabase. Please refresh and try again."));
   }
 }
 
@@ -556,18 +556,18 @@ function hasCoreRemoteData() {
 async function persistRemoteData() {
   if (!supabaseClient || !hasLoadedRemoteData) return;
   if (!hasCoreRemoteData()) {
-    remoteStatus = "Supabase sync skipped - no loaded records";
+    remoteStatus = "Sync skipped - no records loaded";
     renderAuthState();
     return;
   }
   try {
     await syncRelationalTables();
-    if (!remoteStatus.includes("course_teacher_associations") && !remoteStatus.includes("batches_status") && !remoteStatus.includes("normalized_sessions")) remoteStatus = "Supabase synced";
+    if (!remoteStatus.includes("course_teacher_associations") && !remoteStatus.includes("batches_status") && !remoteStatus.includes("normalized_sessions")) remoteStatus = "Changes saved";
     renderAuthState();
   } catch (error) {
-    remoteStatus = "Supabase save failed";
+    remoteStatus = "Save failed - please retry";
     renderAuthState();
-    showToast(error.message || "Unable to save to Supabase.");
+    showToast(friendlyErrorMessage(error, "Unable to save changes. Please try again."));
   }
 }
 
@@ -581,13 +581,13 @@ async function upsertSupabaseRows(tableName, rows) {
 async function deleteSupabaseRow(tableName, id) {
   if (!supabaseClient || !hasLoadedRemoteData || !id) return;
   const result = await supabaseClient.from(tableName).delete().eq("id", id);
-  if (result.error) showToast(result.error.message || `Unable to delete from ${tableName}.`);
+  if (result.error) showToast(friendlyErrorMessage(result.error, "Unable to delete this record. It may be linked to other records."));
 }
 
 async function deleteSupabaseWhere(tableName, column, value) {
   if (!supabaseClient || !hasLoadedRemoteData || !value) return;
   const result = await supabaseClient.from(tableName).delete().eq(column, value);
-  if (result.error) showToast(result.error.message || `Unable to delete from ${tableName}.`);
+  if (result.error) showToast(friendlyErrorMessage(result.error, "Unable to delete linked records. Please try again."));
 }
 
 async function syncRelationalTables() {
@@ -1724,7 +1724,7 @@ async function requestPasswordReset(identifier) {
   }
   const { error } = await supabaseClient.auth.resetPasswordForEmail(identifier.trim());
   if (error) {
-    showToast(error.message || "Unable to send password reset.");
+    showToast(friendlyErrorMessage(error, "Unable to send password reset. Please check the email address and try again."));
     return;
   }
   showToast("Password reset email sent.");
@@ -1822,6 +1822,44 @@ function isPortalProgram(course) {
 
 function isRegistrationProgram(course) {
   return programLifecycleStatus(course) !== "Completed";
+}
+
+function friendlyErrorMessage(error, fallback = "Unable to complete this action. Please try again.") {
+  const rawMessage = String(error?.message || error || "").trim();
+  const message = rawMessage.toLowerCase();
+  if (!rawMessage) return fallback;
+  console.warn("Supabase operation failed:", error);
+  if (message.includes("failed to fetch") || message.includes("network") || message.includes("timeout")) {
+    return "Unable to reach Supabase. Please check the internet connection and try again.";
+  }
+  if (message.includes("jwt") || message.includes("token") || message.includes("session")) {
+    return "Your login session has expired. Please log in again.";
+  }
+  if (message.includes("row level security") || message.includes("violates row-level security") || message.includes("rls")) {
+    return "You do not have permission to save this record. Please contact the admin.";
+  }
+  if (message.includes("duplicate key") || message.includes("unique constraint") || message.includes("already registered")) {
+    return "A matching record already exists. Please open the existing record and update it.";
+  }
+  if (message.includes("foreign key") || message.includes("violates foreign key")) {
+    return "This record is linked to another missing or deleted record. Please refresh and select a valid record.";
+  }
+  if (message.includes("not-null") || message.includes("null value")) {
+    return "Some required information is missing. Please complete the required fields and try again.";
+  }
+  if (message.includes("invalid input syntax") || message.includes("invalid") || message.includes("malformed")) {
+    return "One of the values entered is not in the expected format. Please review the form.";
+  }
+  if (message.includes("relation") && message.includes("does not exist")) {
+    return "A required Supabase table is missing. Please run the latest production schema script.";
+  }
+  if (message.includes("column") && message.includes("does not exist")) {
+    return "The Supabase schema is not up to date. Please run the latest production schema script.";
+  }
+  if (message.includes("permission denied") || message.includes("not authorized") || message.includes("unauthorized")) {
+    return "You are not authorized to perform this action.";
+  }
+  return fallback;
 }
 
 function showToast(message) {
@@ -2130,7 +2168,7 @@ async function applyBulkEdit(form) {
     const payload = field === "active" ? { active: boolValue, updated_at: new Date().toISOString() } : { [field]: value, updated_at: new Date().toISOString() };
     const result = await supabaseClient.from("user_roles").update(payload).in("user_id", ids);
     if (result.error) {
-      showToast(result.error.message || "Unable to update users.");
+      showToast(friendlyErrorMessage(result.error, "Unable to update selected users."));
       return;
     }
     await loadAccessManagementData();
@@ -2141,7 +2179,7 @@ async function applyBulkEdit(form) {
     }
     const result = await supabaseClient.from("roles").update({ active: boolValue, updated_at: new Date().toISOString() }).in("id", ids);
     if (result.error) {
-      showToast(result.error.message || "Unable to update roles.");
+      showToast(friendlyErrorMessage(result.error, "Unable to update selected roles."));
       return;
     }
     await loadAccessManagementData();
@@ -4305,7 +4343,7 @@ async function saveAccessRole(form) {
     ? await supabaseClient.from("roles").update(payload).eq("id", existingId)
     : await supabaseClient.from("roles").insert(payload);
   if (result.error) {
-    showToast(result.error.message || "Unable to save role.");
+    showToast(friendlyErrorMessage(result.error, "Unable to save this role."));
     return;
   }
   $("#accessRoleDialog").close();
@@ -4333,7 +4371,7 @@ async function saveAccessUser(form) {
       }
     });
     if (signup.error || !signup.data.user) {
-      showToast(signup.error?.message || "Unable to create login user.");
+      showToast(friendlyErrorMessage(signup.error, "Unable to create the login user. Please check the email and password."));
       return;
     }
     userId = signup.data.user.id;
@@ -4368,7 +4406,7 @@ async function saveAccessUser(form) {
     }
     const teacherResult = await supabaseClient.from("teachers").upsert(teacherPayload);
     if (teacherResult.error) {
-      showToast(teacherResult.error.message || "Unable to save teacher profile.");
+      showToast(friendlyErrorMessage(teacherResult.error, "Unable to save the linked teacher profile."));
       return;
     }
     const existingTeacher = state.teachers.find((teacher) => teacher.id === linkedTeacherId);
@@ -4405,7 +4443,7 @@ async function saveAccessUser(form) {
     ? await supabaseClient.from("user_roles").update(payload).eq("user_id", existingUserId)
     : await supabaseClient.from("user_roles").insert(payload);
   if (result.error) {
-    showToast(result.error.message || "Unable to save user access.");
+    showToast(friendlyErrorMessage(result.error, "Unable to save user access."));
     return;
   }
   $("#accessUserDialog").close();
@@ -4423,7 +4461,7 @@ async function toggleAccessUser(userId) {
     .update({ active: !user.active, updated_at: new Date().toISOString() })
     .eq("user_id", userId);
   if (result.error) {
-    showToast(result.error.message || "Unable to update user access.");
+    showToast(friendlyErrorMessage(result.error, "Unable to update user access."));
     return;
   }
   await loadAccessManagementData();
@@ -4444,7 +4482,7 @@ async function toggleAccessRole(roleId) {
     .update({ active: !role.active, updated_at: new Date().toISOString() })
     .eq("id", roleId);
   if (result.error) {
-    showToast(result.error.message || "Unable to update role.");
+    showToast(friendlyErrorMessage(result.error, "Unable to update this role."));
     return;
   }
   await loadAccessManagementData();
