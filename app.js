@@ -29,6 +29,7 @@ let supportsRoomOperations = true;
 let supportsCoursePricing = true;
 let supportsRegistrationPayment = true;
 let currentFilter = "all";
+let programListFilter = "active";
 let portalProgramFilter = "";
 let portalProgramSort = "startAsc";
 let portalProgramPage = 1;
@@ -2525,7 +2526,10 @@ function renderCalendar() {
 }
 
 function renderCourses() {
-  const courses = visibleCourses();
+  const courses = visibleCourses().filter((course) => programListFilter === "all" || programLifecycleStatus(course) !== "Completed");
+  $$("#programListFilter button").forEach((button) => {
+    button.classList.toggle("is-selected", button.dataset.programListFilter === programListFilter);
+  });
   if (!selectedCourseId || !courses.some((course) => course.id === selectedCourseId)) {
     selectedCourseId = courses[0]?.id || "";
   }
@@ -4814,6 +4818,13 @@ function bindEvents() {
     currentFilter = button.dataset.filter;
     $$("#registrationFilter button").forEach((item) => item.classList.toggle("is-selected", item === button));
     renderRegistrations();
+  });
+  $("#programListFilter").addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-program-list-filter]");
+    if (!button) return;
+    programListFilter = button.dataset.programListFilter;
+    openDetailView.courses = false;
+    renderCourses();
   });
   $("#registrationModeTabs").addEventListener("click", (event) => {
     const button = event.target.closest("button[data-registration-mode]");

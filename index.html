@@ -167,7 +167,13 @@
             <h2>Programs & Schedules</h2>
             <p>Create scheduled residential programs, intake limits, teachers, halls, and dates.</p>
           </div>
-          <button class="primary-button" id="addCourse" type="button">Add Program</button>
+          <div class="row-actions">
+            <div class="segmented" id="programListFilter">
+              <button class="is-selected" data-program-list-filter="active" type="button">Active Programs</button>
+              <button data-program-list-filter="all" type="button">All Programs</button>
+            </div>
+            <button class="primary-button" id="addCourse" type="button">Add Program</button>
+          </div>
         </div>
         <div class="batches-master-layout">
           <div class="table-wrap">
@@ -777,6 +783,6 @@
     <div id="toast" role="status" aria-live="polite"></div>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="supabase-config.js?v=35"></script>
-    <script src="app.js?v=112"></script>
+    <script src="app.js?v=113"></script>
   </body>
 </html>
