@@ -623,6 +623,40 @@
       </form>
     </dialog>
 
+    <dialog id="participantDialog">
+      <form method="dialog" id="participantForm">
+        <div class="modal-header">
+          <div>
+            <p class="eyebrow">Participant Profile</p>
+            <h2>Edit Personal Details</h2>
+          </div>
+          <button class="icon-button" id="closeParticipant" value="cancel" aria-label="Close" type="button">x</button>
+        </div>
+        <input type="hidden" name="id">
+        <div class="form-grid">
+          <label>Name<input name="name" required></label>
+          <label>Age<input name="age" type="number" min="12" max="100" required></label>
+          <label>Gender
+            <select name="gender" required>
+              <option>Female</option>
+              <option>Male</option>
+              <option>Other</option>
+            </select>
+          </label>
+          <label>Phone<input name="phone" required></label>
+          <label>Email ID<input name="email" type="email" required></label>
+          <label>Photo URL<input name="photo" type="url" placeholder="Optional profile photo link"></label>
+          <label>Emergency Contact<input name="emergencyContact" placeholder="Name and phone"></label>
+          <label class="wide">Address<textarea name="address" rows="2"></textarea></label>
+          <label class="wide">Personal Notes<textarea name="notes" rows="3"></textarea></label>
+        </div>
+        <menu>
+          <button class="secondary-button" id="cancelParticipant" value="cancel" type="button">Cancel</button>
+          <button class="primary-button" value="default" type="submit">Save Details</button>
+        </menu>
+      </form>
+    </dialog>
+
     <dialog id="recordDialog">
       <form method="dialog" id="recordForm">
         <div class="modal-header">
@@ -743,6 +777,6 @@
     <div id="toast" role="status" aria-live="polite"></div>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="supabase-config.js?v=35"></script>
-    <script src="app.js?v=108"></script>
+    <script src="app.js?v=109"></script>
   </body>
 </html>

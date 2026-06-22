@@ -100,7 +100,7 @@ const navViews = navGroups.flatMap((group) => group.items);
 
 const roleViews = {
   public: [],
-  participant: ["courses", "participants"],
+  participant: ["courses", "participants", "certificates"],
   teacher: ["courses", "participants", "teachers"],
   admin: [...navViews.map(([id]) => id)]
 };
@@ -1443,20 +1443,51 @@ function isAdmin() {
 }
 
 function canManageMasters() {
-  return Boolean(currentSession.permissions?.canManageMasters);
+  return currentSession.role === "admin" || Boolean(currentSession.permissions?.canManageMasters);
 }
 
 function canReviewRegistrations() {
-  return Boolean(currentSession.permissions?.canReviewRegistrations);
+  return currentSession.role === "admin" || Boolean(currentSession.permissions?.canReviewRegistrations);
 }
 
 function canMarkAttendance() {
-  return Boolean(currentSession.permissions?.canMarkAttendance);
+  return currentSession.role === "admin" || currentSession.role === "teacher" || Boolean(currentSession.permissions?.canMarkAttendance);
 }
 
 function currentParticipant() {
   if (currentSession.role !== "participant") return null;
   return state.participants.find((participant) => participant.id === currentSession.id) || null;
+}
+
+function currentTeacher() {
+  if (currentSession.role !== "teacher") return null;
+  return assignableTeachers().find((teacher) => teacher.id === currentSession.id || teacher.email === currentSession.email) || null;
+}
+
+function courseAssignedToCurrentTeacher(course) {
+  const teacher = currentTeacher();
+  if (!teacher) return false;
+  const displayName = teacherDisplayName(teacher);
+  return course.teacher === displayName || course.teacher === teacher.name || mappedTeachersForProgram(course.programId).some((item) => item.id === teacher.id);
+}
+
+function visibleCourses() {
+  if (currentSession.role === "teacher") return state.courses.filter(courseAssignedToCurrentTeacher);
+  if (currentSession.role === "participant") {
+    const participant = currentParticipant();
+    if (!participant) return [];
+    const courseIds = new Set(registrationsForParticipant(participant).map((registration) => registration.courseId).filter(Boolean));
+    return state.courses.filter((course) => courseIds.has(course.id));
+  }
+  return state.courses;
+}
+
+function canEditParticipant(participantId) {
+  return canManageMasters() || (currentSession.role === "participant" && currentSession.id === participantId);
+}
+
+function canEditTeacher(teacherId) {
+  return canManageMasters() || (currentSession.role === "teacher" && currentTeacher()?.id === teacherId);
 }
 
 function registrationPayloadForCourse(courseId, notes = "", accommodationType = "Not Required", pricingCategory = "", paymentStatus = "Enquiry") {
@@ -1532,13 +1563,22 @@ function registerParticipantForCourse(details, courseId) {
 
 function visibleParticipants() {
   const participant = currentParticipant();
-  return participant ? [participant] : state.participants;
+  if (participant) return [participant];
+  if (currentSession.role === "teacher") {
+    const ids = new Set(visibleRegistrationRows().map(({ participant }) => participant.id));
+    return state.participants.filter((item) => ids.has(item.id));
+  }
+  return state.participants;
 }
 
 function visibleRegistrationRows() {
   const participant = currentParticipant();
   if (participant) {
     return registrationsForParticipant(participant).map((registration) => ({ participant, registration }));
+  }
+  if (currentSession.role === "teacher") {
+    const visibleCourseIds = new Set(visibleCourses().map((course) => course.id));
+    return allRegistrationRows().filter(({ registration }) => visibleCourseIds.has(registration.courseId));
   }
   return allRegistrationRows();
 }
@@ -2282,11 +2322,8 @@ function renderPermissionChrome() {
     const element = $(selector);
     if (element) element.hidden = !canManageMasters();
   });
-  const registrationButtons = ["#addParticipantFromMaster"];
-  registrationButtons.forEach((selector) => {
-    const element = $(selector);
-    if (element) element.hidden = currentSession.role === "participant";
-  });
+  const participantAddButton = $("#addParticipantFromMaster");
+  if (participantAddButton) participantAddButton.hidden = !canManageMasters();
 }
 
 function renderMetrics() {
@@ -2353,8 +2390,9 @@ function renderCalendar() {
 }
 
 function renderCourses() {
-  if (!selectedCourseId || !state.courses.some((course) => course.id === selectedCourseId)) {
-    selectedCourseId = state.courses[0]?.id || "";
+  const courses = visibleCourses();
+  if (!selectedCourseId || !courses.some((course) => course.id === selectedCourseId)) {
+    selectedCourseId = courses[0]?.id || "";
   }
   const layout = document.querySelector(".batches-master-layout");
   if (layout) layout.classList.toggle("detail-open", openDetailView.courses);
@@ -2367,7 +2405,7 @@ function renderCourses() {
     { key: "actions", label: "Actions", value: () => "", sort: false, filter: false }
   ];
   ensureTableChrome("batchRows", "courses", columns);
-  const result = tableRows("courses", state.courses, columns, {
+  const result = tableRows("courses", courses, columns, {
     start: (a, b) => dateFromInput(a.start) - dateFromInput(b.start),
     name: (a, b) => a.name.localeCompare(b.name),
     teacher: (a, b) => a.teacher.localeCompare(b.teacher),
@@ -2400,7 +2438,7 @@ function renderCourses() {
 }
 
 function renderBatchDetail() {
-  const course = state.courses.find((item) => item.id === selectedCourseId);
+  const course = visibleCourses().find((item) => item.id === selectedCourseId);
   if (!course) {
     $("#batchDetail").innerHTML = `<p class="muted">No programs scheduled yet.</p>`;
     return;
@@ -2763,8 +2801,9 @@ function renderProgramDetail() {
 }
 
 function renderTeachers() {
+  const teacher = currentTeacher();
   const teachers = currentSession.role === "teacher"
-    ? assignableTeachers().filter((teacher) => teacher.id === currentSession.id || teacher.email === currentSession.email)
+    ? (teacher ? [teacher] : [])
     : assignableTeachers();
   if (!selectedTeacherId || !teachers.some((teacher) => teacher.id === selectedTeacherId)) {
     selectedTeacherId = teachers[0]?.id || "";
@@ -2796,7 +2835,7 @@ function renderTeachers() {
         <td>${teacher.phone || "No phone"}<br><span class="muted">${teacher.email || "No email"}${teacher.contactNumber ? ` | ${teacher.contactNumber}` : ""}</span></td>
         <td>${programs.length ? programs.map((course) => `<span class="pill">${course.name}</span>`).join(" ") : "<span class=\"muted\">No programs assigned</span>"}</td>
         <td>
-          ${canManageMasters() ? `<div class="row-actions">
+          ${canEditTeacher(teacher.id) ? `<div class="row-actions">
             <button class="secondary-button" type="button" data-teacher-edit="${teacher.id}">Edit Profile</button>
           </div>` : "<span class=\"muted\">View only</span>"}
         </td>
@@ -2822,6 +2861,7 @@ function renderTeachers() {
             <h3>${selectedDisplayName}</h3>
             <p class="muted">${[selected.email, selected.phone, selected.contactNumber].filter(Boolean).join(" | ") || "Contact details not captured"}</p>
           </div>
+          ${canEditTeacher(selected.id) ? `<button class="secondary-button" type="button" data-teacher-edit="${selected.id}">Edit Profile</button>` : ""}
           <span class="pill">${conducted.length} program(s)</span>
         </div>
         <div class="profile-meta">
@@ -2958,6 +2998,7 @@ function renderParticipantsMaster() {
             <h3>${selected.name}</h3>
             <p class="muted">${selected.email} | ${selected.phone}</p>
           </div>
+          ${canEditParticipant(selected.id) ? `<button class="secondary-button" type="button" data-participant-edit="${selected.id}">Edit Personal Details</button>` : ""}
           <span class="pill ${statusClass(registration.completion)}">${registration.completion}</span>
         </div>
         <div class="profile-meta">
@@ -3545,7 +3586,7 @@ function renderAccessManagement() {
 }
 
 function renderCertificates() {
-  $("#certificateList").innerHTML = state.participants.map((p) => {
+  $("#certificateList").innerHTML = visibleParticipants().map((p) => {
     const registration = currentRegistration(p);
     return `
     <article class="certificate-item">
@@ -3996,6 +4037,42 @@ function openTeacherDialog(teacherId = "") {
     $("#teacherDialogTitle").textContent = "Edit Teacher Profile";
   }
   $("#teacherDialog").showModal();
+}
+
+function openParticipantDialog(participantId = "") {
+  const participant = state.participants.find((item) => item.id === participantId);
+  if (!participant || !canEditParticipant(participant.id)) return;
+  const form = $("#participantForm");
+  form.reset();
+  form.elements.id.value = participant.id;
+  form.elements.name.value = participant.name || "";
+  form.elements.age.value = participant.age || "";
+  form.elements.gender.value = participant.gender || "Female";
+  form.elements.phone.value = participant.phone || "";
+  form.elements.email.value = participant.email || "";
+  form.elements.photo.value = participant.photo || "";
+  form.elements.emergencyContact.value = participant.emergencyContact || "";
+  form.elements.address.value = participant.address || "";
+  form.elements.notes.value = participant.notes || "";
+  $("#participantDialog").showModal();
+}
+
+function saveParticipantProfile(form) {
+  const data = new FormData(form);
+  const participant = state.participants.find((item) => item.id === data.get("id"));
+  if (!participant || !canEditParticipant(participant.id)) return;
+  participant.name = data.get("name").trim();
+  participant.age = Number(data.get("age")) || participant.age;
+  participant.gender = data.get("gender");
+  participant.phone = data.get("phone").trim();
+  participant.email = data.get("email").trim();
+  participant.photo = data.get("photo").trim();
+  participant.emergencyContact = data.get("emergencyContact").trim();
+  participant.address = data.get("address").trim();
+  participant.notes = data.get("notes").trim();
+  $("#participantDialog").close();
+  renderAll();
+  showToast("Personal details updated.");
 }
 
 function addOrEditBlock(blockId = "") {
@@ -4781,6 +4858,12 @@ function bindEvents() {
       $("#teacherDialog").close();
       return;
     }
+    const cancelParticipant = event.target.closest("#closeParticipant, #cancelParticipant");
+    if (cancelParticipant) {
+      event.preventDefault();
+      $("#participantDialog").close();
+      return;
+    }
     const cancelRecord = event.target.closest("#closeRecord, #cancelRecord");
     if (cancelRecord) {
       event.preventDefault();
@@ -4941,8 +5024,14 @@ function bindEvents() {
     }
     const editTeacher = event.target.closest("[data-teacher-edit]");
     if (editTeacher) {
-      if (!canManageMasters()) return;
+      if (!canEditTeacher(editTeacher.dataset.teacherEdit)) return;
       openTeacherDialog(editTeacher.dataset.teacherEdit);
+      return;
+    }
+    const editParticipant = event.target.closest("[data-participant-edit]");
+    if (editParticipant) {
+      if (!canEditParticipant(editParticipant.dataset.participantEdit)) return;
+      openParticipantDialog(editParticipant.dataset.participantEdit);
       return;
     }
     const editBlock = event.target.closest("[data-block-edit]");
@@ -5345,6 +5434,10 @@ function bindEvents() {
       education: form.get("education").trim(),
       notes: form.get("notes").trim()
     };
+    if (!canEditTeacher(teacherData.id)) {
+      showToast("You can edit only your own teacher profile.");
+      return;
+    }
     const existingIndex = state.teachers.findIndex((teacher) => teacher.id === teacherData.id);
     if (existingIndex >= 0) {
       const previousName = state.teachers[existingIndex].name;
@@ -5364,6 +5457,11 @@ function bindEvents() {
     $("#teacherDialog").close();
     renderAll();
     showToast(existingIndex >= 0 ? "Teacher updated." : "Teacher added to master.");
+  });
+  $("#participantForm").addEventListener("submit", (event) => {
+    if (event.submitter?.value === "cancel") return;
+    event.preventDefault();
+    saveParticipantProfile(event.currentTarget);
   });
   $("#recordForm").addEventListener("submit", (event) => {
     if (event.submitter?.value === "cancel") return;
