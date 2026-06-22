@@ -2502,6 +2502,7 @@ function renderCalendar() {
     }
     const date = new Date(year, month, dayNumber);
     const programs = state.courses.filter((course) => {
+      if (programLifecycleStatus(course) === "Completed") return false;
       const start = new Date(`${course.start}T00:00:00`);
       const end = new Date(`${course.end}T00:00:00`);
       return isDateInRange(date, start, end);
