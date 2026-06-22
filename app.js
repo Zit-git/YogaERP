@@ -2714,11 +2714,10 @@ function renderCalendar() {
   const gridStart = new Date(year, month, 1 - startOffset);
   const today = new Date();
   const weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  const activePrograms = state.courses
+  const calendarPrograms = state.courses
     .map((course) => ({ course, start: dateFromInput(course.start), end: dateFromInput(course.end) }))
-    .filter(({ course, start, end }) => {
+    .filter(({ start, end }) => {
       if (!start || !end) return false;
-      if (programLifecycleStatus(course) === "Completed") return false;
       return start <= monthEnd && end >= monthStart;
     })
     .sort((first, second) => first.start - second.start || first.end - second.end || first.course.name.localeCompare(second.course.name));
@@ -2730,7 +2729,7 @@ function renderCalendar() {
     weekStart.setDate(gridStart.getDate() + (weekIndex * 7));
     const weekEnd = new Date(weekStart);
     weekEnd.setDate(weekStart.getDate() + 6);
-    const segments = activePrograms.flatMap(({ course, start, end }) => {
+    const segments = calendarPrograms.flatMap(({ course, start, end }) => {
       const segmentStart = new Date(Math.max(start.getTime(), weekStart.getTime(), monthStart.getTime()));
       const segmentEnd = new Date(Math.min(end.getTime(), weekEnd.getTime(), monthEnd.getTime()));
       if (segmentStart > segmentEnd) return [];
@@ -2762,12 +2761,14 @@ function renderCalendar() {
     const programBars = segments.map((segment) => {
       const beginsHere = isSameDate(segment.segmentStart, segment.start);
       const endsHere = isSameDate(segment.segmentEnd, segment.end);
-      const marker = beginsHere && endsHere ? "Full Program" : beginsHere ? "Starts" : endsHere ? "Ends" : "Continues";
+      const lifecycle = programLifecycleStatus(segment.course);
+      const lifecycleLabel = lifecycle === "Active" ? "Current" : lifecycle;
+      const marker = beginsHere && endsHere ? lifecycleLabel : beginsHere ? `Starts | ${lifecycleLabel}` : endsHere ? `Ends | ${lifecycleLabel}` : `Continues | ${lifecycleLabel}`;
       return `<button
-        class="calendar-program ${beginsHere ? "is-start" : "is-continuation"} ${endsHere ? "is-end" : ""}"
+        class="calendar-program ${beginsHere ? "is-start" : "is-continuation"} ${endsHere ? "is-end" : ""} is-${statusClass(lifecycle)}"
         type="button"
         data-course-open="${segment.course.id}"
-        title="${segment.course.name} | ${segment.course.start} to ${segment.course.end}"
+        title="${segment.course.name} | ${segment.course.start} to ${segment.course.end} | ${lifecycleLabel}"
         style="grid-column: ${segment.startCol} / ${segment.endCol + 1}; grid-row: ${segment.lane + 2};"
       ><span>${marker}</span>${segment.course.name}</button>`;
     }).join("");

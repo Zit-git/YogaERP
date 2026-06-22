@@ -597,6 +597,33 @@ textarea { resize: vertical; }
   padding: 8px 11px;
 }
 
+.calendar-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.calendar-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.calendar-legend i {
+  width: 18px;
+  height: 10px;
+  border-radius: 999px;
+  display: inline-block;
+}
+
+.legend-current { background: #bfdbfe; border: 1px solid #2563eb; }
+.legend-upcoming { background: #dcfce7; border: 1px solid #16a34a; }
+.legend-completed { background: #e5e7eb; border: 1px solid #64748b; }
+
 .calendar-grid {
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -695,6 +722,27 @@ textarea { resize: vertical; }
   border-bottom-right-radius: 7px;
 }
 
+.calendar-program.is-active {
+  border-color: #60a5fa;
+  border-left-color: #2563eb;
+  background: #dbeafe;
+  color: #1e3a8a;
+}
+
+.calendar-program.is-upcoming {
+  border-color: #86efac;
+  border-left-color: #16a34a;
+  background: #dcfce7;
+  color: #14532d;
+}
+
+.calendar-program.is-completed {
+  border-color: #cbd5e1;
+  border-left-color: #64748b;
+  background: #f1f5f9;
+  color: #334155;
+}
+
 .calendar-program span {
   display: inline;
   color: var(--accent-dark);
@@ -703,6 +751,10 @@ textarea { resize: vertical; }
   text-transform: uppercase;
   margin-right: 6px;
 }
+
+.calendar-program.is-active span { color: #1d4ed8; }
+.calendar-program.is-upcoming span { color: #15803d; }
+.calendar-program.is-completed span { color: #475569; }
 
 .card-grid {
   display: grid;
