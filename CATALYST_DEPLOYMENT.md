@@ -24,13 +24,13 @@ During init, select the correct Catalyst project. If the CLI asks for features, 
 ## Deploy
 
 ```bash
-catalyst deploy slate -m "Deploy Yoga ERP"
+catalyst deploy slate -m "Deploy Aliyar Programs"
 ```
 
 For production deployment after testing:
 
 ```bash
-catalyst deploy slate --production -m "Production deploy Yoga ERP"
+catalyst deploy slate --production -m "Production deploy Aliyar Programs"
 ```
 
 ## Notes
