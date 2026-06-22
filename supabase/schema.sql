@@ -10,7 +10,7 @@ create table if not exists public.course_masters (
   eligibility text,
   session_templates jsonb not null default '[]'::jsonb,
   teacher_ids jsonb not null default '[]'::jsonb,
-  pricing_tiers jsonb not null default '[{"category":"General","amount":1500}]'::jsonb,
+  pricing_tiers jsonb not null default '[{"category":"General","amount":1500},{"category":"Students","amount":150},{"category":"Refresher","amount":750}]'::jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

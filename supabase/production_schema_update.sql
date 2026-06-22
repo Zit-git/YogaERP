@@ -22,7 +22,7 @@ alter table public.rooms
 
 alter table public.course_masters
   add column if not exists teacher_ids jsonb not null default '[]'::jsonb,
-  add column if not exists pricing_tiers jsonb not null default '[{"category":"General","amount":1500}]'::jsonb;
+  add column if not exists pricing_tiers jsonb not null default '[{"category":"General","amount":1500},{"category":"Students","amount":150},{"category":"Refresher","amount":750}]'::jsonb;
 
 alter table public.batches
   add column if not exists status text not null default 'Upcoming';

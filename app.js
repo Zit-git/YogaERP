@@ -50,7 +50,11 @@ const tablePageSize = 8;
 const roomTypes = ["Single Occupancy", "Double Occupancy", "Dormitory"];
 const accommodationTypes = ["Not Required", ...roomTypes];
 const roomStatuses = ["Clean", "Cleaning", "Dirty", "Maintenance"];
-const defaultPricingTiers = [{ category: "General", amount: 1500 }];
+const defaultPricingTiers = [
+  { category: "General", amount: 1500 },
+  { category: "Students", amount: 150 },
+  { category: "Refresher", amount: 750 }
+];
 const paymentStatuses = ["Enquiry", "Payment Pending", "Paid", "Approved"];
 
 const views = [
@@ -931,12 +935,16 @@ function migrateState() {
       updateRegistrationCompletion(registration);
     });
   });
-  const participantsByPhone = new Map();
+  const participantsByIdentity = [];
   state.participants.forEach((participant) => {
-    const key = participant.phone || participant.id;
-    const existing = participantsByPhone.get(key);
+    const identity = participantIdentity(participant);
+    const existing = participantsByIdentity.find(({ participant: candidate, identity: candidateIdentity }) => {
+      return (identity.phone && candidateIdentity.phone === identity.phone)
+        || (identity.email && candidateIdentity.email === identity.email)
+        || candidate.id === participant.id;
+    })?.participant;
     if (!existing) {
-      participantsByPhone.set(key, participant);
+      participantsByIdentity.push({ participant, identity });
       return;
     }
     existing.registrations = [...registrationsForParticipant(existing), ...registrationsForParticipant(participant)];
@@ -947,7 +955,7 @@ function migrateState() {
     if (!existing.emergencyContact && participant.emergencyContact) existing.emergencyContact = participant.emergencyContact;
     syncParticipantFromRegistration(existing, currentRegistration(existing));
   });
-  state.participants = Array.from(participantsByPhone.values());
+  state.participants = participantsByIdentity.map((entry) => entry.participant);
 }
 
 function saveData() {
@@ -1003,6 +1011,34 @@ function normalizePaymentStatus(value) {
   return paymentStatuses.includes(value) ? value : "Enquiry";
 }
 
+function normalizeEmail(value = "") {
+  return String(value || "").trim().toLowerCase();
+}
+
+function normalizePhone(value = "") {
+  const digits = String(value || "").replace(/\D/g, "");
+  return digits.length > 10 ? digits.slice(-10) : digits;
+}
+
+function participantIdentity(participant = {}) {
+  return {
+    phone: normalizePhone(participant.phone || participant.id),
+    email: normalizeEmail(participant.email)
+  };
+}
+
+function findParticipantByIdentity(details = {}) {
+  const phone = normalizePhone(details.phone || details.id);
+  const email = normalizeEmail(details.email);
+  const participantId = details.participantId || details.id || "";
+  return state.participants.find((participant) => {
+    const identity = participantIdentity(participant);
+    return (participantId && participant.id === participantId)
+      || (phone && identity.phone === phone)
+      || (email && identity.email === email);
+  }) || null;
+}
+
 function normalizePricingTiers(value) {
   const tiers = Array.isArray(value) ? value : [];
   const normalized = tiers.map((tier) => ({
@@ -1037,6 +1073,31 @@ function pricingTiersForCourse(courseId) {
 function priceForRegistration(courseId, category) {
   const tiers = pricingTiersForCourse(courseId);
   return tiers.find((tier) => tier.category === category)?.amount ?? tiers[0]?.amount ?? 0;
+}
+
+function isRefresherCategory(category = "") {
+  return String(category || "").trim().toLowerCase() === "refresher";
+}
+
+function hasCompletedCourseMasterBefore(participant, courseId, excludeRegistrationId = "") {
+  if (!participant) return false;
+  const targetMasterId = courseMasterForProgram(courseId)?.id || "";
+  return registrationsForParticipant(participant).some((registration) => {
+    if (registration.id === excludeRegistrationId || registration.courseId === courseId) return false;
+    if (registration.completion !== "Completed") return false;
+    const registrationMasterId = courseMasterForProgram(registration.courseId)?.id || "";
+    return targetMasterId ? registrationMasterId === targetMasterId : registration.courseId === courseId;
+  });
+}
+
+function requiresRefresherCompletionVerification(participant, registration) {
+  return isRefresherCategory(registration?.pricingCategory) && !hasCompletedCourseMasterBefore(participant, registration.courseId, registration.id);
+}
+
+function canApproveRegistration(participant, registration) {
+  if (!requiresRefresherCompletionVerification(participant, registration)) return true;
+  showToast("Refresher registration needs a completed earlier program for this course before confirmation.");
+  return false;
 }
 
 function paidOrApprovedRegistrationsForCourse(courseId, excludeRegistrationId = "") {
@@ -1477,7 +1538,7 @@ function visibleCourses() {
     const participant = currentParticipant();
     if (!participant) return [];
     const courseIds = new Set(registrationsForParticipant(participant).map((registration) => registration.courseId).filter(Boolean));
-    return state.courses.filter((course) => courseIds.has(course.id));
+    return state.courses.filter((course) => courseIds.has(course.id) || isPortalProgram(course));
   }
   return state.courses;
 }
@@ -1490,16 +1551,18 @@ function canEditTeacher(teacherId) {
   return canManageMasters() || (currentSession.role === "teacher" && currentTeacher()?.id === teacherId);
 }
 
-function registrationPayloadForCourse(courseId, notes = "", accommodationType = "Not Required", pricingCategory = "", paymentStatus = "Enquiry") {
+function registrationPayloadForCourse(courseId, notes = "", accommodationType = "Not Required", pricingCategory = "", paymentStatus = "Enquiry", participant = null) {
   const course = state.courses.find((item) => item.id === courseId);
   const tiers = pricingTiersForCourse(courseId);
   const selectedCategory = pricingCategory || tiers[0]?.category || "General";
   const normalizedPaymentStatus = normalizePaymentStatus(paymentStatus);
+  const refresherNeedsVerification = isRefresherCategory(selectedCategory) && !hasCompletedCourseMasterBefore(participant, courseId);
+  const status = refresherNeedsVerification ? "Pending" : seatStatusForRegistration(courseId, normalizedPaymentStatus);
   return {
     id: newId("registration"),
     courseId,
-    status: seatStatusForRegistration(courseId, normalizedPaymentStatus),
-    eligible: normalizedPaymentStatus === "Approved",
+    status,
+    eligible: normalizedPaymentStatus === "Approved" && !refresherNeedsVerification,
     pricingCategory: selectedCategory,
     amount: priceForRegistration(courseId, selectedCategory),
     paymentStatus: normalizedPaymentStatus,
@@ -1513,26 +1576,46 @@ function registrationPayloadForCourse(courseId, notes = "", accommodationType = 
     completion: "Pending",
     certificate: false,
     sessionAttendance: [],
-    notes,
+    notes: [notes, refresherNeedsVerification ? "Refresher completion pending verification." : ""].filter(Boolean).join(" | "),
     registeredOn: new Date().toISOString().slice(0, 10)
   };
 }
 
 function registerParticipantForCourse(details, courseId) {
-  const phone = details.phone.trim();
-  const registration = registrationPayloadForCourse(courseId, details.notes || "", details.accommodationType || "Not Required", details.pricingCategory || "", details.paymentStatus || "Enquiry");
-  let participant = state.participants.find((item) => item.phone === phone || item.id === phone);
+  const phone = String(details.phone || "").trim();
+  const email = String(details.email || "").trim();
+  let participant = findParticipantByIdentity({
+    participantId: details.participantId,
+    phone,
+    email
+  });
+  const registration = registrationPayloadForCourse(courseId, details.notes || "", details.accommodationType || "Not Required", details.pricingCategory || "", details.paymentStatus || "Enquiry", participant);
   if (participant) {
-    participant.name = details.name.trim() || participant.name;
+    participant.name = String(details.name || "").trim() || participant.name;
     participant.age = Number(details.age) || participant.age;
     participant.gender = details.gender || participant.gender;
-    participant.email = details.email.trim() || participant.email;
+    if (!participant.phone || normalizePhone(participant.phone) === normalizePhone(phone)) participant.phone = phone || participant.phone;
+    participant.email = email || participant.email;
     participant.photo = (details.photo || "").trim() || participant.photo || "";
     participant.address = (details.address || "").trim() || participant.address || "";
     participant.emergencyContact = (details.emergencyContact || "").trim() || participant.emergencyContact || "";
     participant.notes = details.notes || participant.notes || "";
-    registrationsForParticipant(participant).push(registration);
-    syncParticipantFromRegistration(participant, registration);
+    const existingRegistration = registrationsForParticipant(participant).find((item) => item.courseId === courseId && !["Cancelled", "Dropout"].includes(item.status));
+    if (existingRegistration) {
+      existingRegistration.pricingCategory = registration.pricingCategory;
+      existingRegistration.amount = registration.amount;
+      existingRegistration.paymentStatus = registration.paymentStatus;
+      existingRegistration.status = registration.status;
+      existingRegistration.eligible = registration.eligible;
+      existingRegistration.accommodationType = registration.accommodationType;
+      existingRegistration.checkinDate ||= registration.checkinDate;
+      existingRegistration.checkoutDate ||= registration.checkoutDate;
+      existingRegistration.notes = [existingRegistration.notes, registration.notes].filter(Boolean).join(" | ");
+      syncParticipantFromRegistration(participant, existingRegistration);
+    } else {
+      registrationsForParticipant(participant).push(registration);
+      syncParticipantFromRegistration(participant, registration);
+    }
     return participant;
   }
   participant = {
@@ -1542,7 +1625,7 @@ function registerParticipantForCourse(details, courseId) {
     gender: details.gender,
     courseId,
     phone,
-    email: details.email.trim(),
+    email,
     photo: (details.photo || "").trim(),
     address: (details.address || "").trim(),
     emergencyContact: (details.emergencyContact || "").trim(),
@@ -1955,6 +2038,19 @@ function openRegistrationDialog(courseId = "") {
   if (courseId) $("#courseSelect").value = courseId;
   renderRegistrationPricingOptions();
   setRegistrationMode("individual");
+  const participant = currentParticipant();
+  if (participant) {
+    const form = $("#registrationForm");
+    form.elements.name.value = participant.name || "";
+    form.elements.age.value = participant.age || "";
+    form.elements.gender.value = participant.gender || "Female";
+    form.elements.phone.value = participant.phone || "";
+    form.elements.email.value = participant.email || "";
+    form.elements.photo.value = participant.photo || "";
+    form.elements.emergencyContact.value = participant.emergencyContact || "";
+    form.elements.address.value = participant.address || "";
+    form.elements.notes.value = participant.notes || "";
+  }
   $("#registrationDialog").showModal();
 }
 
@@ -2427,7 +2523,7 @@ function renderCourses() {
         <td>
           <div class="row-actions">
             ${canManageMasters() ? `<button class="secondary-button" type="button" data-course-edit="${course.id}">Edit</button><button class="danger-button" type="button" data-course-delete="${course.id}">Delete</button>` : ""}
-            ${status !== "Completed" && currentSession.role !== "participant" ? `<button class="secondary-button" type="button" data-course-register="${course.id}">Register</button>` : "<span class=\"muted\">Not available</span>"}
+            ${status !== "Completed" ? `<button class="secondary-button" type="button" data-course-register="${course.id}">Register</button>` : "<span class=\"muted\">Not available</span>"}
           </div>
         </td>
       </tr>
@@ -5170,10 +5266,6 @@ function bindEvents() {
     }
     const registerButton = event.target.closest("[data-course-register]");
     if (registerButton) {
-      if (currentSession.role === "participant") {
-        showToast("Logout to use public registration.");
-        return;
-      }
       const course = state.courses.find((item) => item.id === registerButton.dataset.courseRegister);
       if (!course || !isPortalProgram(course)) {
         showToast("Registration is open only for upcoming programs.");
@@ -5192,10 +5284,16 @@ function bindEvents() {
       return;
     }
     if (registrationId) {
+      const actionParticipant = state.participants.find((item) => item.id === id);
+      const actionRegistration = actionParticipant ? registrationsForParticipant(actionParticipant).find((item) => item.id === registrationId) : null;
+      if (!actionParticipant || !actionRegistration) return;
+      if (["eligible", "approve", "confirm"].includes(type) && !canApproveRegistration(actionParticipant, actionRegistration)) return;
       if (type === "eligible") updateRegistration(id, registrationId, (registration) => registration.eligible = true, "Eligibility verified.");
       if (type === "paid") updateRegistration(id, registrationId, (registration) => {
         registration.paymentStatus = "Paid";
-        registration.status = seatStatusForRegistration(registration.courseId, registration.paymentStatus, registration.id);
+        registration.status = requiresRefresherCompletionVerification(actionParticipant, registration)
+          ? "Pending"
+          : seatStatusForRegistration(registration.courseId, registration.paymentStatus, registration.id);
       }, "Payment marked paid.");
       if (type === "approve") updateRegistration(id, registrationId, (registration) => {
         registration.paymentStatus = "Approved";
@@ -5275,7 +5373,9 @@ function bindEvents() {
       return;
     }
     const mode = form.get("registrationMode");
+    const loggedParticipant = currentParticipant();
     const registrants = mode === "bulk" ? bulkRegistrantDetails() : [{
+      participantId: loggedParticipant?.id || "",
       name: form.get("name"),
       age: form.get("age"),
       gender: form.get("gender"),
