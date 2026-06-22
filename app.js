@@ -3274,7 +3274,30 @@ function renderRegistrations() {
     room: (a, b) => `${normalizeAccommodationType(a.registration.accommodationType)} ${roomName(a.registration.roomId)}`.localeCompare(`${normalizeAccommodationType(b.registration.accommodationType)} ${roomName(b.registration.roomId)}`)
   });
   const showActions = canReviewRegistrations();
-  $("#participantRows").innerHTML = result.rows.map(({ participant, registration }) => {
+  const groupedRows = result.rows.reduce((groups, row) => {
+    const key = row.registration.courseId || "unassigned";
+    let group = groups.find((item) => item.key === key);
+    if (!group) {
+      group = { key, rows: [] };
+      groups.push(group);
+    }
+    group.rows.push(row);
+    return groups;
+  }, []);
+  $("#participantRows").innerHTML = groupedRows.map((group) => {
+    const course = state.courses.find((item) => item.id === group.key);
+    const programTitle = course ? `<button class="text-link-button" type="button" data-linked-batch="${course.id}">${course.name}</button>` : "Unassigned Program";
+    const programMeta = course ? `${course.start || "No start date"} to ${course.end || "No end date"} | ${group.rows.length} registration(s)` : `${group.rows.length} registration(s)`;
+    return `
+      <tr class="registration-group-row">
+        <td colspan="${canManageMasters() ? 8 : 7}">
+          <div>
+            <strong>${programTitle}</strong>
+            <span>${programMeta}</span>
+          </div>
+        </td>
+      </tr>
+      ${group.rows.map(({ participant, registration }) => {
     const contactLine = [participant.phone, participant.email].filter(Boolean).join(" | ") || "Contact not captured";
     return `
       <tr>
@@ -3300,6 +3323,8 @@ function renderRegistrations() {
           `}
         </td>
       </tr>
+    `;
+      }).join("")}
     `;
   }).join("") || `<tr><td colspan="${canManageMasters() ? 8 : 7}"><span class="muted">No registrations found.</span></td></tr>`;
   renderTablePagination("registrations", result);

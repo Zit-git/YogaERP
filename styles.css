@@ -1142,6 +1142,31 @@ textarea { resize: vertical; }
   font-size: 12px;
 }
 
+.registration-group-row td {
+  background: #f1f5f9;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  padding: 9px 12px;
+}
+
+.registration-group-row div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.registration-group-row strong {
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.registration-group-row span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
+}
+
 .session-plan-table {
   margin-bottom: 14px;
 }
