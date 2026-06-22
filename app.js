@@ -25,6 +25,7 @@ let supportsNormalizedSessions = true;
 let supportsTeacherProfileFields = true;
 let supportsRegistrationAccommodationType = true;
 let supportsRegistrationStayDates = true;
+let supportsRoomOperations = true;
 let currentFilter = "all";
 let portalProgramFilter = "";
 let portalProgramSort = "startAsc";
@@ -46,6 +47,7 @@ const bulkSelections = {};
 const tablePageSize = 8;
 const roomTypes = ["Single Occupancy", "Double Occupancy", "Dormitory"];
 const accommodationTypes = ["Not Required", ...roomTypes];
+const roomStatuses = ["Clean", "Cleaning", "Dirty", "Maintenance"];
 
 const views = [
   ["portal", "Portal"],
@@ -263,8 +265,14 @@ async function detectRegistrationAccommodationTypeSupport() {
 
 async function detectRegistrationStayDatesSupport() {
   if (!supabaseClient) return;
-  const { error } = await supabaseClient.from("registrations").select("checkin_date, checkout_date").limit(1);
+  const { error } = await supabaseClient.from("registrations").select("checkin_date, checkout_date, checked_out").limit(1);
   supportsRegistrationStayDates = !error;
+}
+
+async function detectRoomOperationsSupport() {
+  if (!supabaseClient) return;
+  const { error } = await supabaseClient.from("rooms").select("status, cleaning_notes").limit(1);
+  supportsRoomOperations = !error;
 }
 
 function groupRowsBy(rows, key) {
@@ -320,6 +328,7 @@ async function loadRelationalData() {
   await detectTeacherProfileFieldsSupport();
   await detectRegistrationAccommodationTypeSupport();
   await detectRegistrationStayDatesSupport();
+  await detectRoomOperationsSupport();
   const [
     courseMasters,
     teachers,
@@ -410,7 +419,9 @@ async function loadRelationalData() {
       floorId: room.floor_id || "",
       name: room.name,
       gender: normalizeRoomType(room.gender),
-      beds: Number(room.beds) || 1
+      beds: Number(room.beds) || 1,
+      status: normalizeRoomStatus(room.status),
+      cleaningNotes: room.cleaning_notes || ""
     })),
     courses: batches.map((batch) => {
       const hall = halls.find((item) => item.id === batch.hall_id);
@@ -464,6 +475,7 @@ async function loadRelationalData() {
       accommodationType: normalizeAccommodationType(registration.accommodation_type),
       roomId: registration.room_id || "",
       checkedIn: Boolean(registration.checked_in),
+      checkedOut: Boolean(registration.checked_out),
       checkinDate: registration.checkin_date || "",
       checkoutDate: registration.checkout_date || "",
       attendance: Number(registration.attendance) || 0,
@@ -570,6 +582,9 @@ async function syncRelationalTables() {
   if (!supportsRegistrationStayDates && allRegistrationRows().some(({ registration }) => registration.checkinDate || registration.checkoutDate)) {
     remoteStatus = "Supabase synced - run supabase/production_schema_update.sql";
   }
+  if (!supportsRoomOperations && state.rooms.some((room) => normalizeRoomStatus(room.status) !== "Clean" || room.cleaningNotes)) {
+    remoteStatus = "Supabase synced - run supabase/production_schema_update.sql";
+  }
   const teacherRows = state.teachers.map((teacher) => ({
     id: teacher.id,
     name: teacher.name,
@@ -622,6 +637,12 @@ async function syncRelationalTables() {
     gender: normalizeRoomType(room.gender),
     beds: Number(room.beds) || 1,
     updated_at: now
+  })).map((row, index) => ({
+    ...row,
+    ...(supportsRoomOperations ? {
+      status: normalizeRoomStatus(state.rooms[index].status),
+      cleaning_notes: state.rooms[index].cleaningNotes || ""
+    } : {})
   }));
   const batchRows = state.courses.map((course) => {
     const teacher = teacherByName(course.teacher);
@@ -682,7 +703,8 @@ async function syncRelationalTables() {
       ...(supportsRegistrationAccommodationType ? { accommodation_type: normalizeAccommodationType(registration.accommodationType) } : {}),
       ...(supportsRegistrationStayDates ? {
         checkin_date: stayDateRange(registration).start || null,
-        checkout_date: stayDateRange(registration).end || null
+        checkout_date: stayDateRange(registration).end || null,
+        checked_out: Boolean(registration.checkedOut)
       } : {})
     };
   });
@@ -830,6 +852,7 @@ function migrateState() {
         accommodationType: normalizeAccommodationType(participant.accommodationType),
         roomId: participant.roomId,
         checkedIn: participant.checkedIn,
+        checkedOut: Boolean(participant.checkedOut),
         checkinDate: participant.checkinDate || "",
         checkoutDate: participant.checkoutDate || "",
         attendance: participant.attendance,
@@ -915,9 +938,18 @@ function normalizeAccommodationType(value) {
   return accommodationTypes.includes(value) ? value : "Not Required";
 }
 
+function normalizeRoomStatus(value) {
+  return roomStatuses.includes(value) ? value : "Clean";
+}
+
 function roomTypeOptions(selected = "") {
   const normalized = normalizeRoomType(selected);
   return roomTypes.map((type) => ({ value: type, label: type, selected: type === normalized }));
+}
+
+function roomStatusOptions(selected = "Clean") {
+  const normalized = normalizeRoomStatus(selected);
+  return roomStatuses.map((status) => ({ value: status, label: status, selected: status === normalized }));
 }
 
 function roomForParticipant(participant) {
@@ -932,6 +964,10 @@ function roomsForAccommodationType(type) {
   const normalized = normalizeAccommodationType(type);
   if (normalized === "Not Required") return [];
   return state.rooms.filter((room) => normalizeRoomType(room.gender) === normalized);
+}
+
+function isRoomClean(room) {
+  return normalizeRoomStatus(room?.status) === "Clean";
 }
 
 function courseForRegistration(registration) {
@@ -960,6 +996,7 @@ function overlappingRoomRegistrations(roomId, startDate, endDate, excludeRegistr
   return allRegistrationRows().filter(({ registration }) => {
     if (registration.id === excludeRegistrationId) return false;
     if (registration.status !== "Confirmed" || registration.roomId !== roomId) return false;
+    if (registration.checkedOut) return false;
     const stay = stayDateRange(registration);
     return dateRangesOverlap(startDate, endDate, stay.start, stay.end);
   });
@@ -970,6 +1007,7 @@ function roomOccupancyForDateRange(roomId, startDate, endDate, excludeRegistrati
 }
 
 function availableBedsForDateRange(room, startDate, endDate, excludeRegistrationId = "") {
+  if (!isRoomClean(room)) return 0;
   return Math.max(0, Number(room.beds) - roomOccupancyForDateRange(room.id, startDate, endDate, excludeRegistrationId));
 }
 
@@ -984,6 +1022,7 @@ function registrationsForParticipant(participant) {
       accommodationType: normalizeAccommodationType(participant.accommodationType),
       roomId: participant.roomId,
       checkedIn: participant.checkedIn,
+      checkedOut: Boolean(participant.checkedOut),
       checkinDate: participant.checkinDate || "",
       checkoutDate: participant.checkoutDate || "",
       attendance: participant.attendance,
@@ -1006,6 +1045,7 @@ function syncParticipantFromRegistration(participant, registration) {
   participant.accommodationType = normalizeAccommodationType(registration.accommodationType);
   participant.roomId = registration.roomId;
   participant.checkedIn = registration.checkedIn;
+  participant.checkedOut = Boolean(registration.checkedOut);
   participant.checkinDate = registration.checkinDate || "";
   participant.checkoutDate = registration.checkoutDate || "";
   participant.attendance = registration.attendance;
@@ -1249,6 +1289,7 @@ function registrationPayloadForCourse(courseId, notes = "", accommodationType = 
     accommodationType: normalizeAccommodationType(accommodationType),
     roomId: "",
     checkedIn: false,
+    checkedOut: false,
     checkinDate: course?.start || "",
     checkoutDate: course?.end || "",
     attendance: 0,
@@ -2694,7 +2735,7 @@ function renderParticipantsMaster() {
       <div class="detail-item"><span>Stay Dates</span><strong>${stayDateRange(registration).start || "Not set"} to ${stayDateRange(registration).end || "Not set"}</strong></div>
       <div class="detail-item"><span>Accommodation Details</span><strong>${room?.name || "Not assigned"}</strong></div>
       <div class="detail-item"><span>Room Type</span><strong>${room ? `${room.gender} | ${roomOccupants}/${room.beds} beds used` : "Not assigned"}</strong></div>
-      <div class="detail-item"><span>Check-In</span><strong>${registration.checkedIn ? "Checked in" : "Not checked in"}</strong></div>
+      <div class="detail-item"><span>Stay Status</span><strong>${registration.checkedOut ? "Checked out" : registration.checkedIn ? "Checked in" : "Not checked in"}</strong></div>
       <div class="detail-item detail-item-wide"><span>Notes</span><strong>${selected.notes || "No special notes recorded."}</strong></div>
     </div>
     <section class="participant-subform">
@@ -2796,6 +2837,7 @@ function renderRooms() {
     { key: "block", label: "Block", value: (room) => blockName(room.blockId) },
     { key: "floor", label: "Floor", value: (room) => floorName(room.floorId) },
     { key: "gender", label: "Type", value: (room) => room.gender },
+    { key: "status", label: "Status", value: (room) => normalizeRoomStatus(room.status) },
     { key: "beds", label: "Occupancy", value: (room) => Number(room.beds) },
     { key: "actions", label: "Actions", value: () => "", sort: false, filter: false }
   ];
@@ -2834,6 +2876,7 @@ function renderRooms() {
     block: (a, b) => blockName(a.blockId).localeCompare(blockName(b.blockId)),
     floor: (a, b) => floorName(a.floorId).localeCompare(floorName(b.floorId)),
     gender: (a, b) => a.gender.localeCompare(b.gender),
+    status: (a, b) => normalizeRoomStatus(a.status).localeCompare(normalizeRoomStatus(b.status)),
     beds: (a, b) => Number(a.beds) - Number(b.beds)
   });
   const roomRows = roomResult.rows.map((room) => {
@@ -2845,6 +2888,7 @@ function renderRooms() {
       <td>${blockName(room.blockId)}</td>
       <td>${floorName(room.floorId)}</td>
       <td>${room.gender}</td>
+      <td><span class="pill ${isRoomClean(room) ? "confirmed" : "pending"}">${normalizeRoomStatus(room.status)}</span><br><span class="muted">${room.cleaningNotes || ""}</span></td>
       <td>${guests.length}/${room.beds}<div class="bed-bar compact-bed-bar"><span style="width:${Math.min(percent, 100)}%"></span></div></td>
       <td><div class="row-actions"><button class="secondary-button" type="button" data-room-edit="${room.id}">Edit</button><button class="danger-button" type="button" data-room-delete="${room.id}">Delete</button></div></td>
     </tr>`;
@@ -2869,7 +2913,7 @@ function renderRooms() {
     rooms: `
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Room</th><th>Block</th><th>Floor</th><th>Type</th><th>Occupancy</th><th>Actions</th></tr></thead>
+          <thead><tr><th>Room</th><th>Block</th><th>Floor</th><th>Type</th><th>Status</th><th>Occupancy</th><th>Actions</th></tr></thead>
           <tbody id="accommodationRoomRows">${roomRows}</tbody>
         </table>
       </div>
@@ -2923,14 +2967,20 @@ function renderRoomAllotments() {
       ...matchingRooms.map((room) => {
         const occupied = roomOccupancyForDateRange(room.id, stay.start, stay.end, registration.id);
         const isSelected = room.id === registration.roomId;
-        const full = availableBedsForDateRange(room, stay.start, stay.end, registration.id) <= 0 && !isSelected;
-        return `<option value="${room.id}" ${isSelected ? "selected" : ""} ${full ? "disabled" : ""}>${room.name} - ${blockName(room.blockId)} / ${floorName(room.floorId)} (${occupied}/${room.beds})</option>`;
+        const unavailable = availableBedsForDateRange(room, stay.start, stay.end, registration.id) <= 0 && !isSelected;
+        const statusText = isRoomClean(room) ? `${occupied}/${room.beds}` : normalizeRoomStatus(room);
+        return `<option value="${room.id}" ${isSelected ? "selected" : ""} ${unavailable ? "disabled" : ""}>${room.name} - ${blockName(room.blockId)} / ${floorName(room.floorId)} (${statusText})</option>`;
       })
     ].join("");
-    const conflictCount = assignedRoom ? overlappingRoomRegistrations(assignedRoom.id, stay.start, stay.end, registration.id).length : 0;
     const status = assignedRoom
-      ? `<span class="pill confirmed">Allotted</span><br><span class="muted">${conflictCount}/${assignedRoom.beds} overlapping stay(s)</span>`
+      ? `<span class="pill confirmed">Allotted</span><br><span class="muted">${registration.checkedOut ? "Checked out" : registration.checkedIn ? "Checked in" : "Awaiting check-in"}</span>`
       : `<span class="pill pending">Pending</span>`;
+    const stayActions = assignedRoom ? `
+      <div class="row-actions">
+        <button class="secondary-button" type="button" data-room-stay-action="checkin" data-id="${participant.id}" data-registration-id="${registration.id}">Check In</button>
+        <button class="secondary-button" type="button" data-room-stay-action="checkout" data-id="${participant.id}" data-registration-id="${registration.id}">Check Out</button>
+      </div>
+    ` : "";
     return `<tr>
       <td><strong><button class="text-link-button" type="button" data-linked-participant="${participant.id}">${participant.name}</button></strong><br><span class="muted">${participant.phone || participant.email || "Contact not captured"}</span></td>
       <td>${course ? `<button class="text-link-button" type="button" data-linked-batch="${course.id}">${course.name}</button>` : "Program not found"}<br><span class="muted">${course ? `${course.start} to ${course.end}` : "Program dates missing"}</span></td>
@@ -2938,7 +2988,7 @@ function renderRoomAllotments() {
       <td><input type="date" value="${stay.end}" data-stay-date="${participant.id}" data-registration-id="${registration.id}" data-stay-field="checkoutDate"></td>
       <td>${normalizeAccommodationType(registration.accommodationType)}<br><span class="muted">${assignedRoom ? assignedRoom.name : "Not allotted"}</span></td>
       <td><select data-room-allotment="${participant.id}" data-registration-id="${registration.id}">${roomOptions}</select></td>
-      <td>${status}</td>
+      <td>${status}${stayActions}</td>
     </tr>`;
   }).join("");
   const availabilityRooms = state.rooms.filter((room) => roomAvailabilityFilter.type === "All" || normalizeRoomType(room.gender) === roomAvailabilityFilter.type);
@@ -2947,6 +2997,7 @@ function renderRoomAllotments() {
     const available = availableBedsForDateRange(room, roomAvailabilityFilter.start, roomAvailabilityFilter.end);
     const overlaps = allRegistrationRows()
       .filter(({ registration }) => registration.status === "Confirmed" && registration.roomId === room.id)
+      .filter(({ registration }) => !registration.checkedOut)
       .filter(({ registration }) => {
         const stay = stayDateRange(registration);
         return dateRangesOverlap(roomAvailabilityFilter.start, roomAvailabilityFilter.end, stay.start, stay.end);
@@ -2959,10 +3010,34 @@ function renderRoomAllotments() {
     return `<tr>
       <td><strong>${room.name}</strong><br><span class="muted">${blockName(room.blockId)} / ${floorName(room.floorId)}</span></td>
       <td>${normalizeRoomType(room.gender)}</td>
+      <td><span class="pill ${isRoomClean(room) ? "confirmed" : "pending"}">${normalizeRoomStatus(room.status)}</span><br><span class="muted">${room.cleaningNotes || ""}</span></td>
       <td>${available}/${room.beds}<br><span class="muted">${occupied} occupied in range</span></td>
-      <td>${overlaps.length ? upcomingStays.join("<br>") : "<span class=\"muted\">No allotted stays</span>"}</td>
+      <td>${overlaps.length ? upcomingStays.join("<br>") : "<span class=\"muted\">No occupied stays in range</span>"}</td>
+      <td>${!isRoomClean(room) ? `<button class="secondary-button" type="button" data-room-clean="${room.id}">Mark Clean</button>` : ""}</td>
     </tr>`;
   }).join("");
+  const dirtyRows = state.rooms
+    .filter((room) => !isRoomClean(room))
+    .map((room) => `<tr>
+      <td><strong>${room.name}</strong><br><span class="muted">${blockName(room.blockId)} / ${floorName(room.floorId)}</span></td>
+      <td><span class="pill pending">${normalizeRoomStatus(room.status)}</span></td>
+      <td>${room.cleaningNotes || "Needs cleaning update"}</td>
+      <td><button class="secondary-button" type="button" data-room-clean="${room.id}">Mark Clean</button></td>
+    </tr>`).join("");
+  const programReadinessRows = state.courses
+    .filter((course) => dateFromInput(course.end) && dateFromInput(course.end) >= dateFromInput(new Date().toISOString().slice(0, 10)))
+    .sort((a, b) => dateFromInput(a.start) - dateFromInput(b.start))
+    .slice(0, 8)
+    .map((course) => {
+      const required = allRegistrationRows().filter(({ registration }) => registration.courseId === course.id && registration.status === "Confirmed" && normalizeAccommodationType(registration.accommodationType) !== "Not Required").length;
+      const available = state.rooms.reduce((sum, room) => sum + availableBedsForDateRange(room, course.start, course.end), 0);
+      return `<tr>
+        <td><button class="text-link-button" type="button" data-linked-batch="${course.id}">${course.name}</button><br><span class="muted">${course.start} to ${course.end}</span></td>
+        <td>${required}</td>
+        <td>${available}</td>
+        <td><span class="pill ${available >= required ? "confirmed" : "pending"}">${available >= required ? "Rooms Available" : "Room Shortage"}</span></td>
+      </tr>`;
+    }).join("");
   $("#roomAllotmentContent").innerHTML = `
     <div class="stack">
       <section class="panel">
@@ -2983,7 +3058,7 @@ function renderRoomAllotments() {
         <div class="panel-header">
           <div>
             <h2>Available Rooms List</h2>
-            <span class="muted">Datewise availability after checking overlapping stays</span>
+            <span class="muted">Only clean rooms with free beds are available for check-in</span>
           </div>
         </div>
         <div class="form-grid compact-form-grid">
@@ -2997,8 +3072,36 @@ function renderRoomAllotments() {
         </div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>Room</th><th>Type</th><th>Available Beds</th><th>Overlapping Stays</th></tr></thead>
-            <tbody>${availabilityRows || `<tr><td colspan="4"><span class="muted">No rooms configured.</span></td></tr>`}</tbody>
+            <thead><tr><th>Room</th><th>Type</th><th>Cleaning Status</th><th>Available Beds</th><th>Occupied Stays</th><th>Action</th></tr></thead>
+            <tbody>${availabilityRows || `<tr><td colspan="6"><span class="muted">No rooms match this availability filter.</span></td></tr>`}</tbody>
+          </table>
+        </div>
+      </section>
+      <section class="panel">
+        <div class="panel-header">
+          <div>
+            <h2>Dirty Rooms</h2>
+            <span class="muted">Rooms checked out or marked unavailable for cleaning</span>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Room</th><th>Status</th><th>Notes</th><th>Action</th></tr></thead>
+            <tbody>${dirtyRows || `<tr><td colspan="4"><span class="muted">No dirty rooms.</span></td></tr>`}</tbody>
+          </table>
+        </div>
+      </section>
+      <section class="panel">
+        <div class="panel-header">
+          <div>
+            <h2>Program Room Readiness</h2>
+            <span class="muted">Upcoming programs checked against clean room availability</span>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Program</th><th>Required Rooms</th><th>Available Beds</th><th>Status</th></tr></thead>
+            <tbody>${programReadinessRows || `<tr><td colspan="4"><span class="muted">No upcoming programs found.</span></td></tr>`}</tbody>
           </table>
         </div>
       </section>
@@ -3336,6 +3439,7 @@ function updateParticipant(id, updater, message) {
     registration.eligible = participant.eligible;
     registration.roomId = participant.roomId;
     registration.checkedIn = participant.checkedIn;
+    registration.checkedOut = Boolean(participant.checkedOut);
     registration.checkinDate = participant.checkinDate || registration.checkinDate || "";
     registration.checkoutDate = participant.checkoutDate || registration.checkoutDate || "";
     registration.attendance = participant.attendance;
@@ -3447,6 +3551,11 @@ function allotRoomToRegistration(participantId, registrationId, roomId) {
     renderRoomAllotments();
     return;
   }
+  if (room && !isRoomClean(room) && registration.roomId !== room.id) {
+    showToast("Selected room is not clean and cannot be allotted for check-in.");
+    renderRoomAllotments();
+    return;
+  }
   if (room && availableBedsForDateRange(room, stay.start, stay.end, registration.id) <= 0 && registration.roomId !== room.id) {
     showToast("Selected room has no available beds for this date range.");
     renderRoomAllotments();
@@ -3456,6 +3565,53 @@ function allotRoomToRegistration(participantId, registrationId, roomId) {
   if (registration === currentRegistration(participant)) syncParticipantFromRegistration(participant, registration);
   renderAll();
   showToast(room ? `Room allotted: ${room.name}` : "Room allotment cleared.");
+}
+
+function updateRoomStatus(roomId, status, notes = "") {
+  const room = state.rooms.find((item) => item.id === roomId);
+  if (!room) return;
+  room.status = normalizeRoomStatus(status);
+  room.cleaningNotes = notes;
+}
+
+function markRoomClean(roomId) {
+  if (!canManageMasters()) return;
+  updateRoomStatus(roomId, "Clean", "");
+  renderAll();
+  showToast("Room marked clean and available for check-in.");
+}
+
+function updateStayLifecycle(participantId, registrationId, action) {
+  if (!canManageMasters()) return;
+  const participant = state.participants.find((item) => item.id === participantId);
+  if (!participant) return;
+  const registration = registrationsForParticipant(participant).find((item) => item.id === registrationId);
+  if (!registration) return;
+  const room = state.rooms.find((item) => item.id === registration.roomId);
+  if (!room) {
+    showToast("Allot a room before check-in/check-out.");
+    return;
+  }
+  if (action === "checkin") {
+    if (!isRoomClean(room)) {
+      showToast("Room must be clean before check-in.");
+      return;
+    }
+    registration.checkedIn = true;
+    registration.checkedOut = false;
+    if (registration === currentRegistration(participant)) syncParticipantFromRegistration(participant, registration);
+    renderAll();
+    showToast("Participant checked in.");
+    return;
+  }
+  if (action === "checkout") {
+    registration.checkedIn = false;
+    registration.checkedOut = true;
+    updateRoomStatus(room.id, "Dirty", `Checked out by ${participant.name}. Cleaning required.`);
+    if (registration === currentRegistration(participant)) syncParticipantFromRegistration(participant, registration);
+    renderAll();
+    showToast("Participant checked out. Room marked dirty for cleaning.");
+  }
 }
 
 function updateRegistrationStayDate(participantId, registrationId, field, value) {
@@ -3570,7 +3726,9 @@ function addOrEditRoom(roomId = "") {
     ["name", "Room Name", room?.name || "", "text"],
     ["floorId", "Floor", room?.floorId || state.floors[0]?.id || "", "select", floorOptions.length ? floorOptions : [{ value: "", label: "Create a floor first" }]],
     ["gender", "Room Type", normalizeRoomType(room?.gender), "select", roomTypeOptions(room?.gender)],
-    ["beds", "Beds", room?.beds || "4", "number"]
+    ["beds", "Beds", room?.beds || "4", "number"],
+    ["status", "Cleaning Status", normalizeRoomStatus(room?.status), "select", roomStatusOptions(room?.status)],
+    ["cleaningNotes", "Cleaning Notes", room?.cleaningNotes || "", "textarea"]
   ]);
 }
 
@@ -3930,7 +4088,7 @@ function saveRecordForm(form) {
       showToast("Create a floor before adding rooms.");
       return;
     }
-    const payload = { name: data.get("name").trim(), blockId: floor.blockId, floorId, gender: normalizeRoomType(data.get("gender")), beds: Number(data.get("beds")) || 1 };
+    const payload = { name: data.get("name").trim(), blockId: floor.blockId, floorId, gender: normalizeRoomType(data.get("gender")), beds: Number(data.get("beds")) || 1, status: normalizeRoomStatus(data.get("status")), cleaningNotes: data.get("cleaningNotes")?.trim() || "" };
     if (record) Object.assign(record, payload);
     else state.rooms.push({ id: newId("room"), ...payload });
   }
@@ -4195,6 +4353,16 @@ function bindEvents() {
       updateRegistrationStayDate(stayDate.dataset.stayDate, stayDate.dataset.registrationId, stayDate.dataset.stayField, stayDate.value);
       return;
     }
+    const stayAction = event.target.closest("[data-room-stay-action]");
+    if (stayAction) {
+      updateStayLifecycle(stayAction.dataset.id, stayAction.dataset.registrationId, stayAction.dataset.roomStayAction);
+      return;
+    }
+    const cleanRoom = event.target.closest("[data-room-clean]");
+    if (cleanRoom) {
+      markRoomClean(cleanRoom.dataset.roomClean);
+      return;
+    }
     const availabilityFilter = event.target.closest("[data-room-availability-filter]");
     if (availabilityFilter) {
       roomAvailabilityFilter[availabilityFilter.dataset.roomAvailabilityFilter] = availabilityFilter.value;
@@ -4203,6 +4371,17 @@ function bindEvents() {
         showToast("Check-out date adjusted to match check-in.");
       }
       renderRoomAllotments();
+    }
+  });
+  $("#roomAllotmentContent").addEventListener("click", (event) => {
+    const stayAction = event.target.closest("[data-room-stay-action]");
+    if (stayAction) {
+      updateStayLifecycle(stayAction.dataset.id, stayAction.dataset.registrationId, stayAction.dataset.roomStayAction);
+      return;
+    }
+    const cleanRoom = event.target.closest("[data-room-clean]");
+    if (cleanRoom) {
+      markRoomClean(cleanRoom.dataset.roomClean);
     }
   });
   document.body.addEventListener("input", (event) => {

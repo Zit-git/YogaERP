@@ -79,6 +79,8 @@ create table if not exists public.rooms (
   name text not null,
   gender text,
   beds integer not null default 1,
+  status text not null default 'Clean',
+  cleaning_notes text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -140,6 +142,7 @@ create table if not exists public.registrations (
   accommodation_type text not null default 'Not Required',
   room_id text references public.rooms(id) on delete set null,
   checked_in boolean not null default false,
+  checked_out boolean not null default false,
   checkin_date date,
   checkout_date date,
   attendance integer not null default 0,
