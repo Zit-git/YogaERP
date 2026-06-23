@@ -2698,7 +2698,7 @@ function renderMetrics() {
 
 function renderDashboard() {
   const sampleButton = $("#generateSampleData");
-  if (sampleButton) sampleButton.hidden = !canManageMasters();
+  if (sampleButton) sampleButton.hidden = true;
   renderCalendar();
 }
 
