@@ -1,13 +1,14 @@
-alter table public.course_masters disable row level security;
-alter table public.teachers disable row level security;
-alter table public.program_halls disable row level security;
-alter table public.accommodation_blocks disable row level security;
-alter table public.accommodation_floors disable row level security;
-alter table public.rooms disable row level security;
-alter table public.batches disable row level security;
-alter table public.participants disable row level security;
-alter table public.registrations disable row level security;
-alter table public.hall_bookings disable row level security;
+-- Public access is controlled by policies; RLS must remain enabled.
+alter table public.course_masters enable row level security;
+alter table public.teachers enable row level security;
+alter table public.program_halls enable row level security;
+alter table public.accommodation_blocks enable row level security;
+alter table public.accommodation_floors enable row level security;
+alter table public.rooms enable row level security;
+alter table public.batches enable row level security;
+alter table public.participants enable row level security;
+alter table public.registrations enable row level security;
+alter table public.hall_bookings enable row level security;
 
 grant usage on schema public to anon, authenticated;
 

@@ -10,6 +10,8 @@
 6. Create users in **Supabase Authentication > Users**.
 7. Open [supabase/auth_user_roles.sql](supabase/auth_user_roles.sql), replace `REPLACE_WITH_ADMIN_EMAIL` with your admin Auth user email, then run it.
 
+For an existing project that reports `Policy Exists RLS Disabled`, `RLS Disabled in Public`, or `Sensitive Columns Exposed`, run [supabase/fix_security_lints.sql](supabase/fix_security_lints.sql). The verification result at the bottom must show `rls_enabled = true` for every table.
+
 The app now reads/writes only normalized Supabase tables. Browser-local record storage and the old `app_state` JSON snapshot are disabled.
 For an existing project, run [supabase/drop_app_state_snapshot.sql](supabase/drop_app_state_snapshot.sql) once to remove the old snapshot table.
 
@@ -61,12 +63,10 @@ To add more roles later, insert a new row in `public.roles` and set:
 
 ## 4. Current Security Note
 
-The current sync step uses temporary demo policies so the static app can read and write while we wire real Supabase Auth.
+RLS is enabled on all API tables. The current sync step still uses temporary demo policies so the static app and public portal can read and write the required records.
 
 Before production:
 
-- Re-enable row-level security and replace demo access with authenticated role policies.
-- Move login to Supabase Auth.
 - Replace open demo policies with authenticated user policies.
 - Add backup/export jobs.
 
