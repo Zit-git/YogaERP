@@ -1979,10 +1979,8 @@ function statusClass(value) {
 }
 
 function getInitialCalendarDate() {
-  const firstCourse = state.courses
-    .map((course) => new Date(`${course.start}T00:00:00`))
-    .sort((a, b) => a - b)[0];
-  return firstCourse || new Date();
+  const today = new Date();
+  return new Date(today.getFullYear(), today.getMonth(), 1);
 }
 
 function formatMonthTitle(date) {
@@ -2543,6 +2541,7 @@ function renderNav() {
     resetRecordDetailViews();
     linkBackStack = [];
     if (button.dataset.view === "programs") courseMasterTab = "details";
+    if (button.dataset.view === "dashboard") calendarDate = getInitialCalendarDate();
     activateView(button.dataset.view);
     renderAll();
   };
