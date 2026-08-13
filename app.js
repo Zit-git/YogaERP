@@ -18,6 +18,7 @@ let accessUsers = [];
 let hasLoadedRemoteData = false;
 let isHydratingRemoteData = false;
 let remoteSaveTimer = null;
+let remoteLoadVersion = 0;
 const supabaseRequestTimeoutMs = 15000;
 const schemaUpdateStatus = "Database setup needs the latest schema update";
 let remoteStatus = supabaseClient ? "Supabase connecting" : "Supabase not configured";
@@ -162,33 +163,42 @@ async function loadRemoteData() {
     renderAuthState();
     return;
   }
+  const loadVersion = ++remoteLoadVersion;
   try {
     remoteStatus = "Loading Supabase data";
     renderAuthState();
-    await refreshAuthSession();
-    renderNav();
-    const relationalState = await loadRelationalData();
-    Object.keys(state).forEach((key) => delete state[key]);
-    Object.assign(state, relationalState);
-    migrateState();
-    const lifecycleChanged = applyProgramLifecycleStatuses();
-    remoteStatus = hasAnyRecords(state) ? "Supabase connected" : "Supabase connected - no records yet";
-    hasLoadedRemoteData = true;
-    await loadAccessManagementData();
-    calendarDate = getInitialCalendarDate();
-    isHydratingRemoteData = true;
-    renderAll();
-    isHydratingRemoteData = false;
-    if (!canAccessView(currentViewId())) activateView(defaultViewForRole());
-    renderNav();
-    if (lifecycleChanged) persistRemoteData();
+    await withSupabaseTimeout(loadRemoteDataCore(loadVersion), "Supabase is taking too long to respond. Please check the connection and refresh.");
   } catch (error) {
+    remoteLoadVersion += 1;
     remoteStatus = "Data connection unavailable";
     hasLoadedRemoteData = false;
     isHydratingRemoteData = false;
     renderAuthState();
     showToast(friendlyErrorMessage(error, "Unable to load data from Supabase. Please refresh and try again."));
   }
+}
+
+async function loadRemoteDataCore(loadVersion) {
+  await refreshAuthSession();
+  if (loadVersion !== remoteLoadVersion) return;
+  renderNav();
+  const relationalState = await loadRelationalData();
+  if (loadVersion !== remoteLoadVersion) return;
+  Object.keys(state).forEach((key) => delete state[key]);
+  Object.assign(state, relationalState);
+  migrateState();
+  const lifecycleChanged = applyProgramLifecycleStatuses();
+  remoteStatus = hasAnyRecords(state) ? "Supabase connected" : "Supabase connected - no records yet";
+  hasLoadedRemoteData = true;
+  await loadAccessManagementData();
+  if (loadVersion !== remoteLoadVersion) return;
+  calendarDate = getInitialCalendarDate();
+  isHydratingRemoteData = true;
+  renderAll();
+  isHydratingRemoteData = false;
+  if (!canAccessView(currentViewId())) activateView(defaultViewForRole());
+  renderNav();
+  if (lifecycleChanged) persistRemoteData();
 }
 
 async function loadAccessManagementData() {
@@ -375,15 +385,17 @@ function normalizedSessionAttendance(rows, fallback = []) {
 }
 
 async function loadRelationalData() {
-  await detectCourseTeacherIdsSupport();
-  await detectBatchStatusSupport();
-  await detectNormalizedSessionsSupport();
-  await detectTeacherProfileFieldsSupport();
-  await detectRegistrationAccommodationTypeSupport();
-  await detectRegistrationStayDatesSupport();
-  await detectRoomOperationsSupport();
-  await detectCoursePricingSupport();
-  await detectRegistrationPaymentSupport();
+  await Promise.all([
+    detectCourseTeacherIdsSupport(),
+    detectBatchStatusSupport(),
+    detectNormalizedSessionsSupport(),
+    detectTeacherProfileFieldsSupport(),
+    detectRegistrationAccommodationTypeSupport(),
+    detectRegistrationStayDatesSupport(),
+    detectRoomOperationsSupport(),
+    detectCoursePricingSupport(),
+    detectRegistrationPaymentSupport()
+  ]);
   const [
     courseMasters,
     teachers,
