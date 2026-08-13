@@ -18,6 +18,7 @@ let accessUsers = [];
 let hasLoadedRemoteData = false;
 let isHydratingRemoteData = false;
 let remoteSaveTimer = null;
+const supabaseRequestTimeoutMs = 15000;
 const schemaUpdateStatus = "Database setup needs the latest schema update";
 let remoteStatus = supabaseClient ? "Supabase connecting" : "Supabase not configured";
 let supportsCourseTeacherIds = true;
@@ -147,6 +148,14 @@ function createSupabaseSignupClient() {
   });
 }
 
+function withSupabaseTimeout(request, message = "Supabase request timed out. Please check the connection and try again.") {
+  let timeoutId;
+  const timeout = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(message)), supabaseRequestTimeoutMs);
+  });
+  return Promise.race([Promise.resolve(request), timeout]).finally(() => clearTimeout(timeoutId));
+}
+
 async function loadRemoteData() {
   if (!supabaseClient) {
     remoteStatus = "Supabase not configured";
@@ -185,8 +194,8 @@ async function loadRemoteData() {
 async function loadAccessManagementData() {
   if (!supabaseClient) return;
   const [rolesResult, usersResult] = await Promise.all([
-    supabaseClient.from("roles").select("*").order("name", { ascending: true }),
-    supabaseClient.from("user_roles").select("*").order("display_name", { ascending: true })
+    withSupabaseTimeout(supabaseClient.from("roles").select("*").order("name", { ascending: true }), "Unable to load roles from Supabase."),
+    withSupabaseTimeout(supabaseClient.from("user_roles").select("*").order("display_name", { ascending: true }), "Unable to load users from Supabase.")
   ]);
   if (rolesResult.error) throw rolesResult.error;
   if (usersResult.error) throw usersResult.error;
@@ -198,7 +207,7 @@ async function loadAccessManagementData() {
 
 async function refreshAuthSession() {
   if (!supabaseClient) return;
-  const { data, error } = await supabaseClient.auth.getSession();
+  const { data, error } = await withSupabaseTimeout(supabaseClient.auth.getSession(), "Unable to confirm the current login session.");
   if (error || !data.session?.user) {
     currentSession = publicSession();
     cacheCurrentSession();
@@ -208,24 +217,24 @@ async function refreshAuthSession() {
 }
 
 async function applyAuthUserSession(user, { showError = false } = {}) {
-  const { data: roleRecord, error } = await supabaseClient
+  const { data: roleRecord, error } = await withSupabaseTimeout(supabaseClient
     .from("user_roles")
     .select("role_id, display_name, linked_teacher_id, linked_participant_id, active")
     .eq("user_id", user.id)
     .eq("active", true)
-    .maybeSingle();
+    .maybeSingle(), "Unable to load the assigned user role.");
   if (error || !roleRecord) {
     currentSession = publicSession();
     cacheCurrentSession();
     if (showError) showToast("Login found, but no role is assigned in Supabase.");
     return false;
   }
-  const { data: role, error: roleError } = await supabaseClient
+  const { data: role, error: roleError } = await withSupabaseTimeout(supabaseClient
     .from("roles")
     .select("id, name, can_manage_masters, can_review_registrations, can_mark_attendance, active")
     .eq("id", roleRecord.role_id)
     .eq("active", true)
-    .maybeSingle();
+    .maybeSingle(), "Unable to load role permissions.");
   if (roleError || !role) {
     currentSession = publicSession();
     cacheCurrentSession();
@@ -250,72 +259,72 @@ async function applyAuthUserSession(user, { showError = false } = {}) {
 }
 
 async function fetchSupabaseRows(tableName) {
-  const { data, error } = await supabaseClient.from(tableName).select("*");
+  const { data, error } = await withSupabaseTimeout(supabaseClient.from(tableName).select("*"), `Unable to load ${tableName} from Supabase.`);
   if (error) throw error;
   return data || [];
 }
 
 async function fetchOptionalSupabaseRows(tableName) {
-  const { data, error } = await supabaseClient.from(tableName).select("*");
+  const { data, error } = await withSupabaseTimeout(supabaseClient.from(tableName).select("*"), `Unable to load ${tableName} from Supabase.`);
   if (error) return { rows: [], supported: false, error };
   return { rows: data || [], supported: true, error: null };
 }
 
 async function detectCourseTeacherIdsSupport() {
   if (!supabaseClient) return;
-  const { error } = await supabaseClient.from("course_masters").select("teacher_ids").limit(1);
+  const { error } = await withSupabaseTimeout(supabaseClient.from("course_masters").select("teacher_ids").limit(1), "Unable to check course teacher mapping support.");
   supportsCourseTeacherIds = !error;
 }
 
 async function detectBatchStatusSupport() {
   if (!supabaseClient) return;
-  const { error } = await supabaseClient.from("batches").select("status").limit(1);
+  const { error } = await withSupabaseTimeout(supabaseClient.from("batches").select("status").limit(1), "Unable to check program status support.");
   supportsBatchStatus = !error;
 }
 
 async function detectNormalizedSessionsSupport() {
   if (!supabaseClient) return;
   const [courseSessions, batchSessions, attendance] = await Promise.all([
-    supabaseClient.from("course_session_templates").select("id").limit(1),
-    supabaseClient.from("batch_sessions").select("id").limit(1),
-    supabaseClient.from("session_attendance").select("id").limit(1)
+    withSupabaseTimeout(supabaseClient.from("course_session_templates").select("id").limit(1), "Unable to check course session support."),
+    withSupabaseTimeout(supabaseClient.from("batch_sessions").select("id").limit(1), "Unable to check program session support."),
+    withSupabaseTimeout(supabaseClient.from("session_attendance").select("id").limit(1), "Unable to check attendance support.")
   ]);
   supportsNormalizedSessions = !courseSessions.error && !batchSessions.error && !attendance.error;
 }
 
 async function detectTeacherProfileFieldsSupport() {
   if (!supabaseClient) return;
-  const { error } = await supabaseClient.from("teachers").select("title,first_name,last_name,contact_number,education,gender,marital_status").limit(1);
+  const { error } = await withSupabaseTimeout(supabaseClient.from("teachers").select("title,first_name,last_name,contact_number,education,gender,marital_status").limit(1), "Unable to check teacher profile support.");
   supportsTeacherProfileFields = !error;
 }
 
 async function detectRegistrationAccommodationTypeSupport() {
   if (!supabaseClient) return;
-  const { error } = await supabaseClient.from("registrations").select("accommodation_type").limit(1);
+  const { error } = await withSupabaseTimeout(supabaseClient.from("registrations").select("accommodation_type").limit(1), "Unable to check registration accommodation support.");
   supportsRegistrationAccommodationType = !error;
 }
 
 async function detectRegistrationStayDatesSupport() {
   if (!supabaseClient) return;
-  const { error } = await supabaseClient.from("registrations").select("checkin_date, checkout_date, checked_out").limit(1);
+  const { error } = await withSupabaseTimeout(supabaseClient.from("registrations").select("checkin_date, checkout_date, checked_out").limit(1), "Unable to check stay date support.");
   supportsRegistrationStayDates = !error;
 }
 
 async function detectRoomOperationsSupport() {
   if (!supabaseClient) return;
-  const { error } = await supabaseClient.from("rooms").select("status, cleaning_notes").limit(1);
+  const { error } = await withSupabaseTimeout(supabaseClient.from("rooms").select("status, cleaning_notes").limit(1), "Unable to check room operations support.");
   supportsRoomOperations = !error;
 }
 
 async function detectCoursePricingSupport() {
   if (!supabaseClient) return;
-  const { error } = await supabaseClient.from("course_masters").select("pricing_tiers").limit(1);
+  const { error } = await withSupabaseTimeout(supabaseClient.from("course_masters").select("pricing_tiers").limit(1), "Unable to check course pricing support.");
   supportsCoursePricing = !error;
 }
 
 async function detectRegistrationPaymentSupport() {
   if (!supabaseClient) return;
-  const { error } = await supabaseClient.from("registrations").select("pricing_category, amount, payment_status").limit(1);
+  const { error } = await withSupabaseTimeout(supabaseClient.from("registrations").select("pricing_category, amount, payment_status").limit(1), "Unable to check registration payment support.");
   supportsRegistrationPayment = !error;
 }
 
