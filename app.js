@@ -18,6 +18,7 @@ let accessUsers = [];
 let hasLoadedRemoteData = false;
 let isHydratingRemoteData = false;
 let remoteSaveTimer = null;
+const schemaUpdateStatus = "Database setup needs the latest schema update";
 let remoteStatus = supabaseClient ? "Supabase connecting" : "Supabase not configured";
 let supportsCourseTeacherIds = true;
 let supportsBatchStatus = true;
@@ -569,7 +570,7 @@ async function persistRemoteData() {
   }
   try {
     await syncRelationalTables();
-    if (!remoteStatus.includes("course_teacher_associations") && !remoteStatus.includes("batches_status") && !remoteStatus.includes("normalized_sessions")) remoteStatus = "Changes saved";
+    if (remoteStatus !== schemaUpdateStatus) remoteStatus = "Changes saved";
     renderAuthState();
   } catch (error) {
     remoteStatus = "Save failed - please retry";
@@ -619,31 +620,31 @@ async function syncRelationalTables() {
       return row;
     });
   if (!supportsCourseTeacherIds && state.programs.some((program) => (program.teacherIds || []).length)) {
-    remoteStatus = "Supabase synced - run supabase/production_schema_update.sql";
+    remoteStatus = schemaUpdateStatus;
   }
   if (!supportsBatchStatus && state.courses.length) {
-    remoteStatus = "Supabase synced - run supabase/production_schema_update.sql";
+    remoteStatus = schemaUpdateStatus;
   }
   if (!supportsNormalizedSessions && (state.programs.some((program) => (program.sessionTemplates || []).length) || state.courses.some((course) => (course.sessions || []).length))) {
-    remoteStatus = "Supabase synced - run supabase/production_schema_update.sql";
+    remoteStatus = schemaUpdateStatus;
   }
   if (!supportsTeacherProfileFields && state.teachers.some((teacher) => teacher.title || teacher.firstName || teacher.lastName || teacher.contactNumber || teacher.education || teacher.gender || teacher.maritalStatus)) {
-    remoteStatus = "Supabase synced - run supabase/production_schema_update.sql";
+    remoteStatus = schemaUpdateStatus;
   }
   if (!supportsRegistrationAccommodationType && allRegistrationRows().some(({ registration }) => normalizeAccommodationType(registration.accommodationType) !== "Not Required")) {
-    remoteStatus = "Supabase synced - run supabase/production_schema_update.sql";
+    remoteStatus = schemaUpdateStatus;
   }
   if (!supportsRegistrationStayDates && allRegistrationRows().some(({ registration }) => registration.checkinDate || registration.checkoutDate)) {
-    remoteStatus = "Supabase synced - run supabase/production_schema_update.sql";
+    remoteStatus = schemaUpdateStatus;
   }
   if (!supportsRoomOperations && state.rooms.some((room) => normalizeRoomStatus(room.status) !== "Clean" || room.cleaningNotes)) {
-    remoteStatus = "Supabase synced - run supabase/production_schema_update.sql";
+    remoteStatus = schemaUpdateStatus;
   }
   if (!supportsCoursePricing && state.programs.some((program) => normalizePricingTiers(program.pricingTiers).length)) {
-    remoteStatus = "Supabase synced - run supabase/production_schema_update.sql";
+    remoteStatus = schemaUpdateStatus;
   }
   if (!supportsRegistrationPayment && allRegistrationRows().some(({ registration }) => registration.pricingCategory || registration.amount || registration.paymentStatus)) {
-    remoteStatus = "Supabase synced - run supabase/production_schema_update.sql";
+    remoteStatus = schemaUpdateStatus;
   }
   const teacherRows = state.teachers.map((teacher) => ({
     id: teacher.id,
