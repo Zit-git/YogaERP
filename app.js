@@ -1911,26 +1911,29 @@ function permissionsForRole(role) {
 async function login(identifier, password) {
   if (!supabaseClient) {
     showToast("Supabase is not configured. Login requires Supabase Auth.");
-    return;
+    return false;
   }
-  if (!hasLoadedRemoteData) {
-    showToast("Supabase data is still loading. Please try again in a moment.");
-    return;
-  }
-  const { data, error } = await supabaseClient.auth.signInWithPassword({
+  const { data, error } = await withSupabaseTimeout(supabaseClient.auth.signInWithPassword({
     email: identifier.trim(),
     password
-  });
-  if (error || !data.user) {
+  }), "Unable to reach Supabase Auth. Please check the connection and try again.");
+  if (error) {
+    const authMessage = String(error.message || "").toLowerCase();
+    const isCredentialError = authMessage.includes("invalid login credentials") || authMessage.includes("invalid credentials");
+    showToast(isCredentialError ? "Invalid username or password." : friendlyErrorMessage(error, "Unable to login. Please try again."));
+    return false;
+  }
+  if (!data.user) {
     showToast("Invalid username or password.");
-    return;
+    return false;
   }
   const hasRole = await applyAuthUserSession(data.user, { showError: true });
   if (!hasRole) {
-    await supabaseClient.auth.signOut();
-    return;
+    await withSupabaseTimeout(supabaseClient.auth.signOut(), "Unable to clear the incomplete login session.");
+    return false;
   }
   await loadAccessManagementData();
+  if (!hasLoadedRemoteData) await loadRemoteData();
   selectedParticipantId = currentSession.role === "participant" ? currentSession.id : selectedParticipantId;
   selectedTeacherId = currentSession.role === "teacher" ? currentSession.id : selectedTeacherId;
   linkBackStack = [];
@@ -1938,6 +1941,7 @@ async function login(identifier, password) {
   renderAll();
   activateView(defaultViewForRole(currentSession.role));
   showToast(`Logged in as ${currentSession.name}.`);
+  return true;
 }
 
 async function requestPasswordReset(identifier) {
@@ -1945,7 +1949,7 @@ async function requestPasswordReset(identifier) {
     showToast("Password reset requires Supabase Auth.");
     return;
   }
-  const { error } = await supabaseClient.auth.resetPasswordForEmail(identifier.trim());
+  const { error } = await withSupabaseTimeout(supabaseClient.auth.resetPasswordForEmail(identifier.trim()), "Unable to reach Supabase Auth. Please check the connection and try again.");
   if (error) {
     showToast(friendlyErrorMessage(error, "Unable to send password reset. Please check the email address and try again."));
     return;
@@ -1954,7 +1958,7 @@ async function requestPasswordReset(identifier) {
 }
 
 async function logout() {
-  if (supabaseClient) await supabaseClient.auth.signOut();
+  if (supabaseClient) await withSupabaseTimeout(supabaseClient.auth.signOut(), "Unable to clear the current login session.");
   currentSession = publicSession();
   cacheCurrentSession();
   linkBackStack = [];
@@ -5288,8 +5292,8 @@ function bindEvents() {
   $("#loginForm").addEventListener("submit", async (event) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    await login(form.get("identifier"), form.get("password"));
-    event.currentTarget.reset();
+    const didLogin = await login(form.get("identifier"), form.get("password"));
+    if (didLogin) event.currentTarget.reset();
   });
   $("#forgotPasswordForm").addEventListener("submit", async (event) => {
     if (event.submitter?.value === "cancel") return;
