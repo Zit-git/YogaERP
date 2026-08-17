@@ -5291,17 +5291,19 @@ function bindEvents() {
   });
   $("#loginForm").addEventListener("submit", async (event) => {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     const didLogin = await login(form.get("identifier"), form.get("password"));
-    if (didLogin) event.currentTarget.reset();
+    if (didLogin) formElement.reset();
   });
   $("#forgotPasswordForm").addEventListener("submit", async (event) => {
     if (event.submitter?.value === "cancel") return;
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     $("#forgotPasswordDialog").close();
     await requestPasswordReset(form.get("identifier"));
-    event.currentTarget.reset();
+    formElement.reset();
   });
   document.body.addEventListener("click", async (event) => {
     const logoutButton = event.target.closest("#logoutButton");
@@ -5761,7 +5763,8 @@ function bindEvents() {
   $("#registrationForm").addEventListener("submit", (event) => {
     if (event.submitter?.value === "cancel") return;
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     const courseId = form.get("course");
     if (!state.courses.some((course) => course.id === courseId)) {
       showToast("Create a scheduled Program before adding registrations.");
@@ -5791,7 +5794,7 @@ function bindEvents() {
     }
     const savedParticipants = validRegistrants.map((details) => registerParticipantForCourse(details, courseId));
     selectedParticipantId = savedParticipants.at(-1)?.id || selectedParticipantId;
-    event.currentTarget.reset();
+    formElement.reset();
     $("#bulkRegistrantRows").innerHTML = "";
     setRegistrationMode("individual");
     $("#registrationDialog").close();
@@ -5802,7 +5805,8 @@ function bindEvents() {
   $("#courseForm").addEventListener("submit", (event) => {
     if (event.submitter?.value === "cancel") return;
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     const start = form.get("start");
     const end = form.get("end");
     if (end < start) {
@@ -5871,7 +5875,7 @@ function bindEvents() {
     }
     calendarDate = new Date(`${start}T00:00:00`);
     selectedCourseId = courseId;
-    event.currentTarget.reset();
+    formElement.reset();
     $("#courseDialog").close();
     activateView("courses");
     renderAll();
@@ -5880,7 +5884,8 @@ function bindEvents() {
   $("#programForm").addEventListener("submit", (event) => {
     if (event.submitter?.value === "cancel") return;
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     const existingProgram = state.programs.find((program) => program.id === form.get("id"));
     const programId = form.get("id") || newId("program");
     const programData = {
@@ -5901,7 +5906,7 @@ function bindEvents() {
     } else {
       state.programs.push(programData);
     }
-    event.currentTarget.reset();
+    formElement.reset();
     $("#programDialog").close();
     renderAll();
     showToast(existingIndex >= 0 ? "Course updated." : "Course added.");
@@ -5909,7 +5914,8 @@ function bindEvents() {
   $("#teacherForm").addEventListener("submit", (event) => {
     if (event.submitter?.value === "cancel") return;
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     const title = form.get("title");
     const firstName = form.get("firstName").trim();
     const lastName = form.get("lastName").trim();
@@ -5948,7 +5954,7 @@ function bindEvents() {
         if (previousTeacher && (course.teacher === previousTeacher.name || course.teacher === teacherDisplayName(previousTeacher))) course.teacher = teacherData.name;
       });
     }
-    event.currentTarget.reset();
+    formElement.reset();
     $("#teacherDialog").close();
     renderAll();
     showToast(existingIndex >= 0 ? "Teacher updated." : "Teacher added to master.");
@@ -5956,22 +5962,26 @@ function bindEvents() {
   $("#participantForm").addEventListener("submit", (event) => {
     if (event.submitter?.value === "cancel") return;
     event.preventDefault();
-    saveParticipantProfile(event.currentTarget);
+    const formElement = event.currentTarget;
+    saveParticipantProfile(formElement);
   });
   $("#recordForm").addEventListener("submit", (event) => {
     if (event.submitter?.value === "cancel") return;
     event.preventDefault();
-    saveRecordForm(event.currentTarget);
+    const formElement = event.currentTarget;
+    saveRecordForm(formElement);
   });
   $("#accessUserForm").addEventListener("submit", async (event) => {
     if (event.submitter?.value === "cancel") return;
     event.preventDefault();
-    await saveAccessUser(event.currentTarget);
+    const formElement = event.currentTarget;
+    await saveAccessUser(formElement);
   });
   $("#accessRoleForm").addEventListener("submit", async (event) => {
     if (event.submitter?.value === "cancel") return;
     event.preventDefault();
-    await saveAccessRole(event.currentTarget);
+    const formElement = event.currentTarget;
+    await saveAccessRole(formElement);
   });
   $("#bulkEditField").addEventListener("change", (event) => {
     renderBulkValueInput($("#bulkEditForm").elements.tableKey.value);
@@ -5979,12 +5989,14 @@ function bindEvents() {
   $("#bulkEditForm").addEventListener("submit", async (event) => {
     if (event.submitter?.value === "cancel") return;
     event.preventDefault();
-    await applyBulkEdit(event.currentTarget);
+    const formElement = event.currentTarget;
+    await applyBulkEdit(formElement);
   });
   $("#attendanceReasonForm").addEventListener("submit", (event) => {
     if (event.submitter?.value === "cancel") return;
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     $("#attendanceReasonDialog").close();
     markSessionAttendance(
       form.get("participantId"),
