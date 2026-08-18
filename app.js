@@ -3267,6 +3267,7 @@ function renderTeachers() {
         <td>
           ${canEditTeacher(teacher.id) ? `<div class="row-actions">
             <button class="secondary-button" type="button" data-teacher-edit="${teacher.id}">Edit Profile</button>
+            ${canManageMasters() ? `<button class="danger-button" type="button" data-teacher-delete="${teacher.id}">Delete</button>` : ""}
           </div>` : "<span class=\"muted\">View only</span>"}
         </td>
       </tr>
@@ -4502,7 +4503,7 @@ function openTeacherDialog(teacherId = "") {
     form.elements.education.value = teacher.education || "";
     form.elements.notes.value = teacher.notes || "";
   } else {
-    $("#teacherDialogTitle").textContent = "Edit Teacher Profile";
+    $("#teacherDialogTitle").textContent = "Add Teacher";
   }
   $("#teacherDialog").showModal();
 }
@@ -5078,12 +5079,41 @@ async function deleteProgram(programId) {
   showToast("Course deleted.");
 }
 
+function teacherHasLinkedRecords(teacher) {
+  const displayName = teacherDisplayName(teacher);
+  return state.programs.some((course) => {
+    const teacherIds = Array.isArray(course.teacherIds) ? course.teacherIds : [];
+    return teacherIds.includes(teacher.id) || course.teacher === teacher.name || course.teacher === displayName;
+  }) || state.courses.some((program) => {
+    const teacherIds = Array.isArray(program.teacherIds) ? program.teacherIds : [];
+    return teacherIds.includes(teacher.id) || program.teacher === teacher.name || program.teacher === displayName;
+  });
+}
+
+async function deleteTeacher(teacherId) {
+  const teacher = state.teachers.find((item) => item.id === teacherId);
+  if (!teacher) return;
+  if (teacherHasLinkedRecords(teacher)) {
+    showToast("Cannot delete a teacher linked to courses or programs.");
+    return;
+  }
+  state.teachers = state.teachers.filter((item) => item.id !== teacherId);
+  if (selectedTeacherId === teacherId) {
+    selectedTeacherId = state.teachers[0]?.id || "";
+    openDetailView.teachers = false;
+  }
+  await deleteSupabaseRow("teachers", teacherId);
+  renderAll();
+  showToast("Teacher deleted.");
+}
+
 function bindEvents() {
   $("#addCourse").addEventListener("click", () => {
     if (!canManageMasters()) return;
     openCourseDialog();
   });
   $("#addProgram").addEventListener("click", () => canManageMasters() && openProgramDialog());
+  $("#addTeacher").addEventListener("click", () => canManageMasters() && openTeacherDialog());
   $("#addRegistration").addEventListener("click", () => openRegistrationDialog());
   $("#addParticipantFromMaster").addEventListener("click", () => {
     openRegistrationDialog();
@@ -5519,6 +5549,12 @@ function bindEvents() {
     if (editTeacher) {
       if (!canEditTeacher(editTeacher.dataset.teacherEdit)) return;
       openTeacherDialog(editTeacher.dataset.teacherEdit);
+      return;
+    }
+    const deleteTeacherButton = event.target.closest("[data-teacher-delete]");
+    if (deleteTeacherButton) {
+      if (!canManageMasters()) return;
+      deleteTeacher(deleteTeacherButton.dataset.teacherDelete);
       return;
     }
     const editParticipant = event.target.closest("[data-participant-edit]");
